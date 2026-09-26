@@ -1,6 +1,6 @@
 # Ironclad Bot — Discord tickets, applications, vouches, and giveaways
 
-Node.js 20.11+ bot for one Discord server. The bot's **display name** is set to `Ironclad Bot` in the Discord Developer Portal; the code itself cannot rename the application. All records are stored in `data/state.json` by default. Keep that file on persistent storage and back it up.
+Node.js 20.11+ bot for multiple Discord servers. Set the bot's **display name** to `Ironclad Bot` in the Discord Developer Portal. Commands are registered globally, and each server has separate settings, tickets, applications, vouches, and giveaways. All records are stored in `data/state.json` by default. Keep that file on persistent storage and back it up.
 
 ## Features
 
@@ -13,20 +13,18 @@ Node.js 20.11+ bot for one Discord server. The bot's **display name** is set to 
 ## Install
 
 1. Create an application at [Discord Developer Portal](https://discord.com/developers/applications), name it **Ironclad Bot**, and add a Bot user. Copy its **bot token** and **application ID**. Never share the token.
-2. Under Installation, enable **Guild Install** with scopes `bot` and `applications.commands`. Grant the bot **View Channels**, **Send Messages**, **Embed Links**, **Read Message History**, **Manage Channels**, and **Manage Roles**. Install it in your server. The person installing it needs Manage Server permission.
-3. In Discord settings, enable Developer Mode; right-click your server and copy its ID.
-4. Copy `.env.example` to `.env`, enter `DISCORD_TOKEN`, `CLIENT_ID`, and `GUILD_ID`. Optionally set `DATA_FILE` to a path on your host's persistent disk.
+2. Under Installation, enable **Guild Install** with scopes `bot` and `applications.commands`. Grant the bot **View Channels**, **Send Messages**, **Embed Links**, **Read Message History**, **Manage Channels**, and **Manage Roles**. Install it in each server. The person installing it needs Manage Server permission.
+3. Copy `.env.example` to `.env`, enter `DISCORD_TOKEN` and `CLIENT_ID`. `GUILD_ID` is optional: set it to the original server ID once if you previously registered server-only commands, so the next deploy clears those copies. Optionally set `DATA_FILE` to a path on your host's persistent disk.
 5. Run:
 
    ```bash
    npm install
-   npm run deploy
    npm start
    ```
 
-   `npm run deploy` registers the slash commands for the configured server. Re-run it when command definitions change. Keep `npm start` running on an always-on host.
+   `npm start` registers global slash commands for every server that installs the app, then starts the bot. New and updated global commands may take time to appear in Discord. Keep it running on an always-on host.
 
-6. Create a staff role, a tickets **category**, a private staff-only **applications** text channel, and a public **vouches** text channel. Ensure the bot can read and send messages in both text channels. Run `/setup` and select those resources. **Check that ordinary members cannot view the applications channel.** You can optionally select a logs channel.
+6. In **each server**, create a staff role, a tickets **category**, a private staff-only **applications** text channel, and a public **vouches** text channel. Ensure the bot can read and send messages in both text channels. Run `/setup` in that server and select those resources. **Check that ordinary members cannot view the applications channel.** You can optionally select a logs channel.
 7. Post `/panel type:tickets` and `/panel type:applications` in the channels where members should see them. Members can also use `/ticket open` and `/apply` directly.
 
 ## Operational notes
@@ -40,8 +38,8 @@ To change application questions, edit `applicationModal()` and the matching fiel
 Render runs a Discord bot as a **Background Worker**, since the bot does not serve an HTTP website. A continuously running worker and the persistent disk used by this bot are **paid** Render resources. Check Render's checkout price before creating the service. The included `render.yaml` configures one worker, a 1 GB disk, command registration on each deploy, and the correct data path.
 
 1. Create a GitHub repository and upload the **contents inside `ironclad-bot`** to the repository root. The repository root must contain `package.json`, `package-lock.json`, `render.yaml`, and `src/`. Do **not** upload `.env`, `data/`, or `node_modules/`.
-2. In Render, select **New → Blueprint**, connect that repository, and review the paid Background Worker and disk it will create. During setup, enter your real `DISCORD_TOKEN` (Bot Token), `CLIENT_ID` (Application ID), and `GUILD_ID` (server ID) when prompted. Keep the token secret. `DATA_FILE` is already set to `/var/data/state.json` on the disk.
-3. Deploy. The build runs `npm ci`, command registration runs `npm run deploy`, and the worker starts with `npm start`. Look for `Registered 7 commands` and `Ironclad Bot is online as ...` in Render logs.
+2. In Render, select **New → Blueprint**, connect that repository, and review the paid Background Worker and disk it will create. During setup, enter your real `DISCORD_TOKEN` (Bot Token) and `CLIENT_ID` (Application ID) when prompted. Keep the token secret. `DATA_FILE` is already set to `/var/data/state.json` on the disk. For an existing Render service, keep its old `GUILD_ID` environment variable through one deployment to remove its old server-only commands.
+3. Deploy. The build runs `npm ci`, and `npm start` registers commands before starting the worker. Look for `Registered 7 global commands` and `Ironclad Bot is online as ...` in Render logs.
 4. After Render reports the worker is live, stop the local PowerShell copy with Ctrl+C. Keep **only one** copy of the bot running to avoid duplicate interactions and divergent data.
 
-The Render disk starts empty. If your local bot already has saved tickets, applications, vouches, or giveaway records in `data/state.json`, a fresh Render worker will not inherit them. Transfer that file to `/var/data/state.json` on the Render disk before using the hosted copy if you need the existing records. Never commit that file to GitHub. If you choose to create the worker manually instead of using the Blueprint, use `npm ci` as Build Command, `npm run deploy && npm start` as Start Command, configure the same three secrets, and attach a disk at `/var/data` with `DATA_FILE=/var/data/state.json`.
+The Render disk starts empty. If your local bot already has saved tickets, applications, vouches, or giveaway records in `data/state.json`, a fresh Render worker will not inherit them. Transfer that file to `/var/data/state.json` on the Render disk before using the hosted copy if you need the existing records. Never commit that file to GitHub. If you choose to create the worker manually instead of using the Blueprint, use `npm ci` as Build Command, `npm start` as Start Command, configure the token and application ID, and attach a disk at `/var/data` with `DATA_FILE=/var/data/state.json`.
