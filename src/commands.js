@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, ChannelType, InteractionContextType, ApplicationIntegrationType } = require('discord.js');
 
 const commands = [
   new SlashCommandBuilder().setName('setup').setDescription('Configure Ironclad Bot for this server')
@@ -36,4 +36,7 @@ const commands = [
       .addStringOption(v => v.setName('message_id').setDescription('Giveaway message ID in this channel').setRequired(true)))
 ];
 
-module.exports = commands;
+// The bot needs a server installation and does not handle direct messages.
+module.exports = commands.map(command => command
+  .setContexts(InteractionContextType.Guild)
+  .setIntegrationTypes(ApplicationIntegrationType.GuildInstall));
