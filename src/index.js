@@ -14,7 +14,8 @@ const row = (id, label, style) => new ActionRowBuilder().addComponents(
   new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(style)
 );
 const staff = (i, cfg) => i.memberPermissions?.has(PermissionFlagsBits.ManageGuild) ||
-  (cfg.staffRoleId && i.member?.roles?.cache?.has(cfg.staffRoleId));
+  (cfg.staffRoleId && (i.member?.roles?.cache?.has(cfg.staffRoleId) ||
+    (Array.isArray(i.member?.roles) && i.member.roles.includes(cfg.staffRoleId))));
 const configValid = cfg => cfg.staffRoleId && cfg.categoryId && cfg.applicationsChannelId && cfg.vouchesChannelId;
 const safe = s => String(s).replace(/@/g, '@\u200b').replace(/[`*_~|>]/g, '');
 const mentions = { parse: [] };
