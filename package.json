@@ -4,7 +4,7 @@
   "private": true,
   "description": "Discord tickets, applications, and vouches",
   "scripts": {
-    "start": "node src/index.js",
+    "start": "npm run deploy && node src/index.js",
     "deploy": "node src/deploy.js"
   },
   "engines": { "node": ">=20.11.0" },
