@@ -1,5 +1,6 @@
 const { randomBytes, timingSafeEqual } = require('node:crypto');
 const { PermissionFlagsBits, ChannelType } = require('discord.js');
+const polls = require('./polls');
 
 const sessions = new Map();
 const states = new Map();
@@ -67,7 +68,7 @@ async function discord(path, options = {}) {
   return response.json();
 }
 function numbers(raw, max) { const n = Number(raw); if (!/^\d+$/.test(String(raw)) || !Number.isSafeInteger(n) || n < 1 || n > max) throw new Error(`Enter a whole number between 1 and ${max}.`); return n; }
-function nav(guild) { const base = `/g/${guild.id}`; return `<nav><a href="${base}">Overview</a><a href="${base}/tickets">Tickets</a><a href="${base}/vouches">Vouches</a><a href="${base}/giveaways">Giveaways</a></nav>`; }
+function nav(guild) { const base = `/g/${guild.id}`; return `<nav><a href="${base}">Overview</a><a href="${base}/tickets">Tickets</a><a href="${base}/vouches">Vouches</a><a href="${base}/giveaways">Giveaways</a><a href="${base}/polls">Polls</a></nav>`; }
 
 module.exports = (bot, store, giveaways) => async (req, res) => {
   let session;
@@ -117,10 +118,11 @@ module.exports = (bot, store, giveaways) => async (req, res) => {
       return redirect(res, '/');
     }
     if (!session) return redirect(res, '/');
-    const match = /^\/g\/(\d{17,22})(?:\/(tickets|vouches|giveaways))?(?:\/(\d{17,22}|start))?(?:\/(reply))?$/.exec(path);
+    const match = /^\/g\/(\d{17,22})(?:\/(tickets|vouches|giveaways|polls))?(?:\/(\d{17,22}|start|create))?(?:\/(reply))?$/.exec(path);
     if (!match) return errorPage(res, 'Page not found.', 404, session);
     let [, guildId, section, ticketId, action] = match;
     if (section === 'giveaways' && ticketId === 'start') { ticketId = undefined; action = 'start'; }
+    if (section === 'polls' && ticketId === 'create') { ticketId = undefined; action = 'create'; }
     const guild = bot.guilds.cache.get(guildId);
     if (!guild) return errorPage(res, 'The bot is not in this server.', 404, session);
     const data = store.guild(guildId), cfg = data.config;
@@ -157,13 +159,21 @@ module.exports = (bot, store, giveaways) => async (req, res) => {
         await giveaways.start(guild, channel, data, { kind, prize, levels: levelAmount, minutes, winners, hostId: session.userId, hostName: session.username });
         return redirect(res, `${base}/giveaways`);
       }
+      if (section === 'polls' && action === 'create' && !ticketId) {
+        const channelId = fields.get('channel');
+        if (!idPattern.test(channelId || '')) throw new Error('Choose a channel.');
+        const channel = await guild.channels.fetch(channelId).catch(() => null);
+        const answers = (fields.get('answers') || '').split(/\r?\n/);
+        const message = await polls.create(guild, channel, fields.get('question'), answers, fields.get('hours'));
+        return redirect(res, `${base}/polls?created=${message.id}&channel=${channel.id}`);
+      }
       return errorPage(res, 'Action not found.', 404, session);
     }
     if (req.method !== 'GET') return errorPage(res, 'Method not allowed.', 405, session);
     if (!section) {
       const open = Object.values(data.tickets).filter(t => t.status === 'open').length;
       const vouches = Object.values(data.vouches).reduce((total, list) => total + list.length, 0);
-      return html(res, page(guild.name, `${heading}<p class="muted">Manage this server’s tickets and giveaways directly through Ironclad Bot.</p><div class="grid"><div class="card"><h2>${open} open tickets</h2><a href="${base}/tickets">Answer tickets →</a></div><div class="card"><h2>${vouches} vouches</h2><a href="${base}/vouches">See vouches →</a></div><div class="card"><h2>${Object.values(data.giveaways).filter(g => g.status === 'open').length} active giveaways</h2><a href="${base}/giveaways">Manage giveaways →</a></div></div>`, session));
+      return html(res, page(guild.name, `${heading}<p class="muted">Manage this server’s tickets, giveaways, and polls directly through Ironclad Bot.</p><div class="grid"><div class="card"><h2>${open} open tickets</h2><a href="${base}/tickets">Answer tickets →</a></div><div class="card"><h2>${vouches} vouches</h2><a href="${base}/vouches">See vouches →</a></div><div class="card"><h2>${Object.values(data.giveaways).filter(g => g.status === 'open').length} active giveaways</h2><a href="${base}/giveaways">Manage giveaways →</a></div><div class="card"><h2>Polls</h2><a href="${base}/polls">Create a poll →</a></div></div>`, session));
     }
     if (section === 'tickets') {
       if (ticketId) {
@@ -190,9 +200,21 @@ module.exports = (bot, store, giveaways) => async (req, res) => {
       const list = Object.entries(data.giveaways).sort((a, b) => b[1].endAt - a[1].endAt).slice(0, 40).map(([id, g]) => `<div class="card"><span class="pill">${esc(g.status)}</span> <b>${esc(g.prize)}</b><p>${g.entries.length} entries · ${g.winnerCount} winners</p><p class="muted">Ends ${esc(new Date(g.endAt).toLocaleString())}</p><a href="https://discord.com/channels/${guildId}/${g.channelId}/${id}">Open in Discord ↗</a></div>`).join('');
       return html(res, page('Giveaways', `${heading}${form}<h2>Recent giveaways</h2><div class="grid">${list || '<p>No giveaways yet.</p>'}</div>`, session));
     }
+    if (section === 'polls' && !ticketId) {
+      const self = await guild.members.fetchMe();
+      const channels = [...guild.channels.cache.values()].filter(ch => ch.type === ChannelType.GuildText &&
+        ch.permissionsFor(self)?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendPolls]))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      const created = url.searchParams.get('created');
+      const createdChannel = url.searchParams.get('channel');
+      const success = idPattern.test(created || '') && idPattern.test(createdChannel || '') ?
+        `<p class="card success">Poll posted. <a href="https://discord.com/channels/${guildId}/${createdChannel}/${created}">View it in Discord ↗</a></p>` : '';
+      const form = `<div class="card"><h2>Create a poll</h2><p class="muted">Votes and results are handled by Discord.</p><form method="post" action="${base}/polls/create"><input type="hidden" name="csrf" value="${session.csrf}"><label for="poll-channel">Channel</label><select id="poll-channel" name="channel" required>${channels.map(ch => `<option value="${ch.id}">#${esc(ch.name)}</option>`).join('')}</select><label for="question">Question</label><input id="question" name="question" maxlength="300" required><label for="answers">Answers (one per line, 2–10)</label><textarea id="answers" name="answers" required placeholder="Yes&#10;No"></textarea><label for="hours">Duration in hours (1–768)</label><input id="hours" name="hours" type="number" min="1" max="768" required value="24"><p><button ${channels.length ? '' : 'disabled'}>Post poll in Discord</button></p></form></div>`;
+      return html(res, page('Polls', `${heading}${success}${form}`, session));
+    }
     return errorPage(res, 'Page not found.', 404, session);
   } catch (err) {
     console.error('Dashboard request failed:', err);
-    return errorPage(res, err.message?.startsWith('I need ') || /^(Enter|Choose|Prize|Reply|Session|Request|This ticket|Only Owner|Ticket channel)/.test(err.message || '') ? err.message : 'The dashboard could not complete that request. Check the bot permissions and try again.', 400, session);
+    return errorPage(res, err.message?.startsWith('I need ') || /^(Enter|Choose|Prize|Reply|Session|Request|This ticket|Only Owner|Ticket channel|Poll)/.test(err.message || '') ? err.message : 'The dashboard could not complete that request. Check the bot permissions and try again.', 400, session);
   }
 };

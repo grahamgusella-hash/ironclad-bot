@@ -7,11 +7,13 @@ const {
 } = require('discord.js');
 const store = require('./store');
 const levels = require('./levels');
+const polls = require('./polls');
 
 if (!process.env.DISCORD_TOKEN) throw new Error('Missing DISCORD_TOKEN in .env');
 const bot = new Client({ intents: [GatewayIntentBits.Guilds] });
 const giveaways = require('./giveaways')(bot, store);
 const purge = require('./purge')(bot, store);
+const wipe = require('./wipe')(bot);
 // The website and bot share one process and the same per-server data store.
 if (process.env.PORT) {
   const port = Number(process.env.PORT);
@@ -293,6 +295,16 @@ bot.on('interactionCreate', async i => {
       }
       if (i.commandName === 'withdraw') return withdraw(i, data);
       if (i.commandName === 'purge') return purge.preview(i, data);
+      if (i.commandName === 'wipe') return wipe.preview(i, data);
+      if (i.commandName === 'poll') {
+        if (!staff(i, data.config) && !levels.canManage(i, data.config) && i.user.id !== i.guild.ownerId)
+          return i.reply(privateReply('Only staff, Owner, or Co-Owner can create polls.'));
+        const channel = i.options.getChannel('channel') || i.channel;
+        const answers = Array.from({ length: 5 }, (_, n) => i.options.getString(`answer_${n + 1}`));
+        await i.deferReply({ flags: MessageFlags.Ephemeral });
+        const message = await polls.create(i.guild, channel, i.options.getString('question'), answers, i.options.getInteger('hours') || 24);
+        return i.editReply(`Poll posted in ${channel}: ${message.url}`);
+      }
       if (i.commandName === 'giveaway') return giveaways.command(i, data, staff(i, data.config), levels.canManage(i, data.config));
       if (i.commandName === 'vouches') {
         const user = i.options.getUser('user');
@@ -304,6 +316,7 @@ bot.on('interactionCreate', async i => {
     }
     if (i.isButton()) {
       if (i.customId.startsWith('purge:')) return purge.button(i, data);
+      if (i.customId.startsWith('wipe:')) return wipe.button(i, data);
       if (i.customId.startsWith('giveaway:enter:')) return giveaways.enter(i, data);
       if (i.customId === 'ticket:open') return openTicket(i, data);
       if (i.customId === 'ticket:close') return ticketAction(i, data, 'close');

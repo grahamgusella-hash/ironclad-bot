@@ -39,6 +39,17 @@ const commands = [
     .addSubcommand(o => o.setName('balance').setDescription('See your available levels')),
   new SlashCommandBuilder().setName('leaderboard').setDescription('Show this server’s level leaderboard'),
   new SlashCommandBuilder().setName('purge').setDescription('Server owner or Co-Owner: delete all ticket channels after confirmation'),
+  new SlashCommandBuilder().setName('wipe').setDescription('Owner or Co-Owner: delete every message in this text channel'),
+  new SlashCommandBuilder().setName('poll').setDescription('Create a Discord poll')
+    .addSubcommand(o => o.setName('create').setDescription('Staff: create a poll in a text channel')
+      .addStringOption(v => v.setName('question').setDescription('Poll question').setRequired(true).setMaxLength(300))
+      .addStringOption(v => v.setName('answer_1').setDescription('First answer').setRequired(true).setMaxLength(55))
+      .addStringOption(v => v.setName('answer_2').setDescription('Second answer').setRequired(true).setMaxLength(55))
+      .addStringOption(v => v.setName('answer_3').setDescription('Third answer').setMaxLength(55))
+      .addStringOption(v => v.setName('answer_4').setDescription('Fourth answer').setMaxLength(55))
+      .addStringOption(v => v.setName('answer_5').setDescription('Fifth answer').setMaxLength(55))
+      .addIntegerOption(v => v.setName('hours').setDescription('Duration in hours (default 24, maximum 768)').setMinValue(1).setMaxValue(768))
+      .addChannelOption(v => v.setName('channel').setDescription('Where to post (defaults to here)').addChannelTypes(ChannelType.GuildText))),
   new SlashCommandBuilder().setName('withdraw').setDescription('Withdraw levels into a private staff ticket')
     .addIntegerOption(o => o.setName('amount').setDescription('Levels to withdraw').setRequired(true).setMinValue(1).setMaxValue(1000000)),
   new SlashCommandBuilder().setName('giveaway').setDescription('Run a prize giveaway')
