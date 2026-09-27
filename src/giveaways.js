@@ -34,6 +34,25 @@ function draw(record, count, exclude = []) {
 module.exports = (bot, store) => {
   const inProgress = new Set();
 
+  async function start(guild, channel, data, { kind, prize, levels: levelAmount, minutes, winners, hostId, hostName }) {
+    const self = await guild.members.fetchMe();
+    if (!channel?.isTextBased() || !channel.permissionsFor(self)?.has([
+      PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks,
+      PermissionFlagsBits.ReadMessageHistory
+    ])) throw new Error('I need View Channel, Send Messages, Embed Links, and Read Message History here.');
+    const record = {
+      kind, prize: kind === 'levels' ? `${levelAmount} levels each` : prize,
+      ...(kind === 'levels' ? { levels: levelAmount } : {}), winnerCount: winners,
+      hostId, hostName: safe(hostName), channelId: channel.id,
+      endAt: Date.now() + minutes * 60000, entries: [], winners: [], status: 'open'
+    };
+    const msg = await channel.send({ embeds: [embed(record)], allowedMentions: { parse: [] } });
+    data.giveaways[msg.id] = record;
+    store.save();
+    await msg.edit({ components: controls(msg.id) });
+    return msg;
+  }
+
   async function finish(guildId, messageId) {
     const key = `${guildId}:${messageId}`;
     if (inProgress.has(key)) return false;
@@ -70,26 +89,12 @@ module.exports = (bot, store) => {
     if (action === 'level' ? !canManageLevels : !isStaff && !canManageLevels)
       return i.reply(privateReply(action === 'level' ? 'Only the configured Owner or Co Owner role can start level giveaways.' : 'Only staff can manage giveaways.'));
     if (action === 'start' || action === 'level') {
-      const self = await i.guild.members.fetchMe();
-      if (!i.channel?.isTextBased() || !i.channel.permissionsFor(self)?.has([
-        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks,
-        PermissionFlagsBits.ReadMessageHistory
-      ])) return i.reply(privateReply('I need View Channel, Send Messages, Embed Links, and Read Message History here.'));
-      const minutes = i.options.getInteger('minutes');
-      const levelAmount = action === 'level' ? i.options.getInteger('levels') : null;
-      const record = {
-        kind: action === 'level' ? 'levels' : 'standard',
-        prize: action === 'level' ? `${levelAmount} levels each` : i.options.getString('prize'),
-        ...(action === 'level' ? { levels: levelAmount } : {}),
-        winnerCount: i.options.getInteger('winners') || 1,
-        hostId: i.user.id, hostName: safe(i.user.username), channelId: i.channelId,
-        endAt: Date.now() + minutes * 60000, entries: [], winners: [], status: 'open'
-      };
       await i.deferReply({ flags: MessageFlags.Ephemeral });
-      const msg = await i.channel.send({ embeds: [embed(record)], allowedMentions: { parse: [] } });
-      data.giveaways[msg.id] = record;
-      store.save();
-      await msg.edit({ components: controls(msg.id) });
+      const msg = await start(i.guild, i.channel, data, {
+        kind: action === 'level' ? 'levels' : 'standard', prize: i.options.getString('prize'),
+        levels: i.options.getInteger('levels'), minutes: i.options.getInteger('minutes'),
+        winners: i.options.getInteger('winners') || 1, hostId: i.user.id, hostName: i.user.username
+      });
       return i.editReply(`Giveaway started: ${msg.url}`);
     }
     const id = i.options.getString('message_id');
@@ -143,5 +148,5 @@ module.exports = (bot, store) => {
     }
   }
 
-  return { command, enter, sweep };
+  return { command, enter, sweep, start };
 };

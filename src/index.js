@@ -10,21 +10,14 @@ const levels = require('./levels');
 
 if (!process.env.DISCORD_TOKEN) throw new Error('Missing DISCORD_TOKEN in .env');
 const bot = new Client({ intents: [GatewayIntentBits.Guilds] });
-// Render Web Services require an HTTP listener. Workers do not set PORT.
+const giveaways = require('./giveaways')(bot, store);
+// The website and bot share one process and the same per-server data store.
 if (process.env.PORT) {
   const port = Number(process.env.PORT);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid PORT');
-  http.createServer((req, res) => {
-    if (req.url !== '/' && req.url !== '/health') {
-      res.writeHead(404).end('Not found');
-      return;
-    }
-    const ready = bot.isReady();
-    res.writeHead(ready ? 200 : 503, { 'Content-Type': 'text/plain; charset=utf-8' });
-    res.end(ready ? 'Ironclad Bot is online' : 'Connecting to Discord');
-  }).listen(port, '0.0.0.0', () => console.log(`Health endpoint listening on port ${port}`));
+  http.createServer(require('./web')(bot, store, giveaways)).listen(port, '0.0.0.0',
+    () => console.log(`Ironclad dashboard listening on port ${port}`));
 }
-const giveaways = require('./giveaways')(bot, store);
 const privateReply = content => ({ content, flags: MessageFlags.Ephemeral });
 const row = (id, label, style) => new ActionRowBuilder().addComponents(
   new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(style)
