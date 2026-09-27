@@ -1,6 +1,6 @@
 # Ironclad Bot — tickets, applications, vouches, levels, and giveaways
 
-Node.js 20.11+ bot for multiple Discord servers. Set the bot's **display name** to `Ironclad Bot` in the Discord Developer Portal. Commands are registered globally, and each server has separate settings, tickets, applications, vouches, level balances, and giveaways. All records are stored in `data/state.json` by default. Keep that file on persistent storage and back it up.
+Node.js 20.11+ bot for multiple Discord servers. Set the bot's **display name** to `Ironclad Bot` in the Discord Developer Portal. Commands are registered globally, and each server has separate settings, tickets, applications, vouches, level balances, and giveaways. All records are stored in `data/state.json` by default on your own computer. Set `DATABASE_URL` to use Neon Postgres for persistent storage on Render. Back up important records.
 
 ## Features
 
@@ -23,22 +23,22 @@ The website runs in the **same Node process and Render Web Service** as the bot.
 
 1. In the Discord Developer Portal, open this bot application → **OAuth2**. Under **Redirects**, add `https://ironclad-bot.onrender.com/auth/callback` exactly. If your Render URL is different, replace the hostname.
 2. Copy the application's **OAuth2 Client Secret** (different from the Bot Token). In the existing Render service, open **Environment** and add `DISCORD_CLIENT_SECRET` with that value. Never commit the secret or send it in chat.
-3. In Render, add `PUBLIC_URL` with your service's full HTTPS URL, for example `https://ironclad-bot.onrender.com`, without a trailing slash. Keep `DISCORD_TOKEN`, `CLIENT_ID`, and `DATA_FILE` as before. Redeploy if Render does not deploy after saving environment variables.
+3. In Render, add `PUBLIC_URL` with your service's full HTTPS URL, for example `https://ironclad-bot.onrender.com`, without a trailing slash. Keep `DISCORD_TOKEN` and `CLIENT_ID` as before. Redeploy if Render does not deploy after saving environment variables.
 4. Open the Render URL and sign in. The bot checks your configured Discord staff, Owner, or Co-Owner role before it shows server data. `/setup` in each server must be completed first.
 
-The dashboard sessions are held in memory, so a redeploy signs users out. The bot's JSON store still needs a persistent disk: the current free Web Service does not provide one, and stored levels, tickets, vouches, and giveaway records can disappear on restart. A paid Web Service with a disk is needed to reliably preserve those records and run scheduled giveaways continuously.
+The dashboard sessions are held in memory, so a redeploy signs users out. Configure `DATABASE_URL` with a Neon connection string to retain setup, levels, tickets, vouches, and giveaways across Render restarts. Render Free can still go to sleep, so giveaways may finish late when the bot wakes.
 
 ### Install the dashboard on a phone
 
 On Android, open the dashboard URL in Chrome, tap the three-dot menu, and choose **Install app** (or **Add to Home screen**). Sign in with Discord as usual. The installed dashboard opens from your home screen in its own window. It needs an internet connection to view tickets and manage the bot; only a generic offline message is stored on the phone. On iPhone, open the dashboard in Safari and use **Share → Add to Home Screen**. This is an installable web app, not an APK or an app-store download.
 
-To receive phone alerts, open each server's dashboard overview in the installed app and tap **Enable notifications on this phone**. Allow notifications when prompted. Staff with access to the ticket or vouch channel receive alerts when someone opens a ticket, posts a vouch, or requests a level withdrawal. Tap an alert to open that item in the dashboard. The button can turn alerts off for that server; signing out clears saved phone subscriptions. Configure a stable `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` on the Render service before enabling alerts (generate a pair once with `npx web-push generate-vapid-keys`). Keep the private key secret and reuse the same pair after redeploys. Subscriptions are saved with the bot state file, so Render's Free Web Service can lose them on restart and will not receive events while asleep. Persistent storage and an always-on service are needed for reliable alerts.
+To receive phone alerts, open each server's dashboard overview in the installed app and tap **Enable notifications on this phone**. Allow notifications when prompted. Staff with access to the ticket or vouch channel receive alerts when someone opens a ticket, posts a vouch, or requests a level withdrawal. Tap an alert to open that item in the dashboard. The button can turn alerts off for that server; signing out clears saved phone subscriptions. Configure a stable `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` on the Render service before enabling alerts (generate a pair once with `npx web-push generate-vapid-keys`). Keep the private key secret and reuse the same pair after redeploys. Subscriptions are saved with the other bot data in Neon when `DATABASE_URL` is set. Render Free still cannot deliver alerts while its web service is asleep.
 
 ## Install
 
 1. Create an application at [Discord Developer Portal](https://discord.com/developers/applications), name it **Ironclad Bot**, and add a Bot user. Copy its **bot token** and **application ID**. Never share the token.
 2. Under Installation, enable **Guild Install** with scopes `bot` and `applications.commands`. Grant the bot **View Channels**, **Send Messages**, **Embed Links**, **Read Message History**, **Manage Channels**, **Manage Messages**, **Create Polls**, and **Manage Roles**. Install it in each server. The person installing it needs Manage Server permission.
-3. Copy `.env.example` to `.env`, enter `DISCORD_TOKEN` and `CLIENT_ID`. `GUILD_ID` is optional: set it to the original server ID once if you previously registered server-only commands, so the next deploy clears those copies. Optionally set `DATA_FILE` to a path on your host's persistent disk.
+3. Copy `.env.example` to `.env`, enter `DISCORD_TOKEN` and `CLIENT_ID`. `GUILD_ID` is optional: set it to the original server ID once if you previously registered server-only commands, so the next deploy clears those copies. For local use, optionally set `DATA_FILE` to a path on your host's persistent disk. On Render, set `DATABASE_URL` instead.
 5. Run:
 
    ```bash
@@ -53,19 +53,19 @@ To receive phone alerts, open each server's dashboard overview in the installed 
 
 ## Operational notes
 
-The bot uses the Guilds gateway intent; Message Content is not needed. It must retain its channel permissions, and the staff, Owner, and Co Owner roles must retain access to the ticket category. Closed ticket channels stay available to staff until deleted; there is no transcript export. `/ticket delete` and `/purge` permanently remove Discord channels. Application submissions and vouches are not automatically moderated. Giveaway winners are drawn at random from entrants; the bot checks for ended giveaways every 15 seconds and catches up after restarting. It must stay online to end giveaways on schedule. For a single running instance, local JSON storage is sufficient; do not run two copies against the same data file. For hosted deployment, configure a persistent volume for `DATA_FILE`, or levels and withdrawals may be lost on restart.
+The bot uses the Guilds gateway intent; Message Content is not needed. It must retain its channel permissions, and the staff, Owner, and Co Owner roles must retain access to the ticket category. Closed ticket channels stay available to staff until deleted; there is no transcript export. `/ticket delete` and `/purge` permanently remove Discord channels. Application submissions and vouches are not automatically moderated. Giveaway winners are drawn at random from entrants; the bot checks for ended giveaways every 15 seconds and catches up after restarting. It must stay online to end giveaways on schedule. For a single locally running instance, local JSON storage is sufficient. On Render, set `DATABASE_URL` to Neon to persist all bot data; do not run a second bot copy against the same Neon database.
 
-As a Render **Web Service**, the bot listens on Render's `PORT` and provides `/health` for port checks. A Free Web Service can go to sleep and has no persistent disk, so it cannot keep giveaways on schedule or reliably retain level balances. Use a paid Web Service with a disk for an always-on bot and dashboard with persistent records.
+As a Render **Web Service**, the bot listens on Render's `PORT` and provides `/health` for port checks. A Free Web Service can go to sleep and has no persistent disk. Neon preserves level balances across restarts when `DATABASE_URL` is set; a sleeping bot will finish giveaways late after it wakes. For timely giveaways and alerts, run an always-on service.
 
 To change application questions, edit `applicationModal()` and the matching field reads in `src/index.js`, then restart the bot. To change slash command definitions, edit `src/commands.js` and rerun `npm run deploy`.
 
-## Host on Render
+## Host on Render with Neon
 
-Render runs the bot and dashboard as one **Web Service**. A continuously running paid Web Service and persistent disk are **paid** Render resources. Check Render's checkout price before creating a new service. The included `render.yaml` configures one Web Service, a 1 GB disk, command registration on each deploy, and the correct data path.
+The bot and dashboard run together on the existing Render Web Service. Neon stores their shared data in Postgres so Render restarts do not reset `/setup`.
 
-1. Create a GitHub repository and upload the **contents inside `ironclad-bot`** to the repository root. The repository root must contain `package.json`, `package-lock.json`, `render.yaml`, and `src/`. Do **not** upload `.env`, `data/`, or `node_modules/`.
-2. In Render, select **New → Blueprint**, connect that repository, and review the paid Background Worker and disk it will create. During setup, enter your real `DISCORD_TOKEN` (Bot Token) and `CLIENT_ID` (Application ID) when prompted. Keep the token secret. `DATA_FILE` is already set to `/var/data/state.json` on the disk. For an existing Render service, keep its old `GUILD_ID` environment variable through one deployment to remove its old server-only commands.
-3. Deploy. The build runs `npm ci`, and `npm start` registers commands before starting the worker. Look for `Registered 13 global commands` and `Ironclad Bot is online as ...` in Render logs.
-4. After Render reports the worker is live, stop the local PowerShell copy with Ctrl+C. Keep **only one** copy of the bot running to avoid duplicate interactions and divergent data.
+1. Create a Neon project with **Postgres database** enabled. In Neon, use **Connect** to copy its Postgres connection string, including `sslmode=require`. Keep it private.
+2. In the **existing** Render Web Service, open **Environment** and add `DATABASE_URL` with that entire string. Do not paste it into chat or GitHub. Keep your existing Discord and website variables.
+3. Deploy this version of the bot after `DATABASE_URL` is set. It creates the `ironclad_state` table and loads the saved record before connecting to Discord or opening the website. Check the Render logs for `Ironclad data loaded from Postgres`.
+4. Run `/setup` once if Render has already deleted its old temporary file. Test that setup and a small level balance remain after a restart.
 
-The Render disk starts empty. If your local bot already has saved tickets, applications, vouches, level balances, or giveaway records in `data/state.json`, a fresh Render worker will not inherit them. Transfer that file to `/var/data/state.json` on the Render disk before using the hosted copy if you need the existing records. Never commit that file to GitHub. If you choose to create the worker manually instead of using the Blueprint, use `npm ci` as Build Command, `npm start` as Start Command, configure the token and application ID, and attach a disk at `/var/data` with `DATA_FILE=/var/data/state.json`.
+Render's current temporary `state.json` is not available through Shell on the Free plan and is not automatically migrated. If you have an existing `state.json` on your own computer, set `DATA_FILE` to it for the first Neon startup; only an empty database will import it. Do not commit the file or connection string. The included `render.yaml` describes a **new** free service and should not be applied to the existing service because it could create a duplicate bot. Keep only one bot instance running per database.

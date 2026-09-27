@@ -142,7 +142,7 @@ module.exports = (bot, store, giveaways, push) => async (req, res) => {
     }
     if (path === '/logout' && req.method === 'POST') {
       verifyPost(req, await body(req), session);
-      push?.removeUser(session.userId);
+      await push?.removeUser(session.userId);
       sessions.delete(cookies(req).ironclad_session);
       setCookie(res, 'ironclad_session', '', 0);
       return redirect(res, '/');
@@ -157,7 +157,7 @@ module.exports = (bot, store, giveaways, push) => async (req, res) => {
       const member = await guild.members.fetch({ user: session.userId, force: true }).catch(() => null);
       if (!push?.isStaff(member, cfg)) return errorPage(res, 'Staff access required.', 403, session);
       const subscription = JSON.parse(fields.get('subscription') || '{}');
-      const subscribed = push.update(fields.get('action'), session.userId, guildId, subscription);
+      const subscribed = await push.update(fields.get('action'), session.userId, guildId, subscription);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
       return res.end(JSON.stringify({ subscribed }));
     }
@@ -219,7 +219,7 @@ module.exports = (bot, store, giveaways, push) => async (req, res) => {
         if (!channel?.permissionsFor(member)?.has(PermissionFlagsBits.ViewChannel)) return errorPage(res, 'You cannot view that channel.', 403, session);
         const answers = (fields.get('answers') || '').split(/\r?\n/);
         const message = await polls.create(guild, channel, fields.get('question'), answers, fields.get('hours'));
-        polls.record(data, store, message, session.userId);
+        await polls.record(data, store, message, session.userId);
         return redirect(res, `${base}/polls?created=${message.id}&channel=${channel.id}`);
       }
       return errorPage(res, 'Action not found.', 404, session);

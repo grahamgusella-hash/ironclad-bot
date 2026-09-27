@@ -17,7 +17,8 @@ const push = require('./push')(bot, store);
 const purge = require('./purge')(bot, store);
 const wipe = require('./wipe')(bot);
 // The website and bot share one process and the same per-server data store.
-if (process.env.PORT) {
+function startWebsite() {
+ if (!process.env.PORT) return;
   const port = Number(process.env.PORT);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid PORT');
   http.createServer(require('./web')(bot, store, giveaways, push)).listen(port, '0.0.0.0',
@@ -48,7 +49,7 @@ async function openTicket(i, data) {
     const ch = await i.guild.channels.fetch(prior[0]).catch(() => null);
     if (ch) return i.reply(privateReply(`You already have an open ticket: ${ch}.`));
     delete data.tickets[prior[0]];
-    store.save();
+    await store.save();
   }
   await i.deferReply({ flags: MessageFlags.Ephemeral });
   const channel = await i.guild.channels.create({
@@ -62,7 +63,7 @@ async function openTicket(i, data) {
     ]
   });
   data.tickets[channel.id] = { ownerId: i.user.id, status: 'open', createdAt: new Date().toISOString() };
-  store.save();
+  await store.save();
   await channel.send({ content: `<@${i.user.id}> Your ticket is open. Staff will respond here.`,
     components: [row('ticket:close', 'Close ticket', ButtonStyle.Danger)],
     allowedMentions: { users: [i.user.id] } });
@@ -83,11 +84,11 @@ async function withdraw(i, data) {
     const channel = await i.guild.channels.fetch(prior[0]).catch(() => null);
     if (channel) return i.editReply(`You already have a withdrawal ticket: ${channel}.`);
     delete data.tickets[prior[0]];
-    store.save();
+    await store.save();
   }
   // Reserve the levels before awaiting Discord, so simultaneous requests cannot spend twice.
   if (!levels.change(data, i.user.id, -amount)) return i.editReply(`You have ${levels.balance(data, i.user.id)} levels available.`);
-  store.save();
+  await store.save();
   let channel;
   try {
     const roleIds = [...new Set([cfg.staffRoleId, cfg.ownerRoleId, cfg.coOwnerRoleId].filter(Boolean))];
@@ -103,11 +104,11 @@ async function withdraw(i, data) {
     });
   } catch (error) {
     levels.change(data, i.user.id, amount);
-    store.save();
+    await store.save();
     throw error;
   }
   data.tickets[channel.id] = { ownerId: i.user.id, type: 'withdrawal', amount, status: 'open', createdAt: new Date().toISOString() };
-  store.save();
+  await store.save();
   await channel.send({ content: `<@${i.user.id}> requested to withdraw **${amount.toLocaleString()} levels**. Staff can handle this request here.`,
     components: [row('ticket:close', 'Close ticket', ButtonStyle.Danger)], allowedMentions: { users: [i.user.id] } });
   await i.editReply(`Withdrawal requested: ${channel}. ${amount.toLocaleString()} levels were removed from your balance.`);
@@ -124,7 +125,7 @@ async function ticketAction(i, data, action) {
   if (action === 'close') {
     if (record.status === 'closed') return i.reply(privateReply('This ticket is already closed.'));
     await i.channel.permissionOverwrites.edit(record.ownerId, { SendMessages: false });
-    record.status = 'closed'; store.save();
+    record.status = 'closed'; await store.save();
     await i.channel.setName(`closed-${i.channel.name.replace(/^ticket-/, '').replace(/^closed-/, '')}`);
     await i.reply({ content: 'Ticket closed. Staff can use `/ticket reopen` or `/ticket delete`.', allowedMentions: mentions });
     return log(i.guild, data.config, `Ticket closed: ${i.channel.id} by ${i.user.id}`);
@@ -132,7 +133,7 @@ async function ticketAction(i, data, action) {
   if (action === 'reopen') {
     if (record.status === 'open') return i.reply(privateReply('This ticket is already open.'));
     await i.channel.permissionOverwrites.edit(record.ownerId, { ViewChannel: true, SendMessages: true });
-    record.status = 'open'; store.save();
+    record.status = 'open'; await store.save();
     await i.channel.setName(`ticket-${i.channel.name.replace(/^closed-/, '').replace(/^ticket-/, '')}`);
     return i.reply({ content: 'Ticket reopened.', allowedMentions: mentions });
   }
@@ -143,7 +144,7 @@ async function ticketAction(i, data, action) {
     for (const app of Object.values(data.applications)) {
       if (app.channelId === i.channelId && app.status === 'pending') app.status = 'canceled';
     }
-    delete data.tickets[i.channelId]; store.save();
+    delete data.tickets[i.channelId]; await store.save();
     return log(i.guild, data.config, `Ticket deleted: ${i.channelId} by ${i.user.id}`);
   }
   if (record.status !== 'open') return i.reply(privateReply('Reopen the ticket first.'));
@@ -203,7 +204,7 @@ async function submitApplication(i, data) {
   } catch (error) { await ticket.delete().catch(console.error); throw error; }
   data.tickets[ticket.id] = { ownerId: i.user.id, type: 'application', status: 'open', createdAt: new Date().toISOString() };
   data.applications[i.user.id] = { status: 'pending', messageId: msg.id, channelId: ticket.id, role, experience, why, submittedAt: new Date().toISOString() };
-  store.save();
+  await store.save();
   await i.editReply(`Application submitted. Your private ticket is ${ticket}.`);
   void push.notify(i.guild, 'application', 'New application', `${i.user.username} submitted an application`, `/g/${i.guildId}/tickets/${ticket.id}`, ticket).catch(console.error);
   await ch.send({ content: `New application from ${safe(i.user.username)}: ${ticket}`, allowedMentions: mentions }).catch(console.error);
@@ -244,7 +245,7 @@ async function addVouch(i, data) {
       { name: 'From', value: `${safe(i.user.username)} (${i.user.id})` },
       { name: 'Reason', value: safe(reason) }).setTimestamp()], allowedMentions: mentions });
   list.push({ authorId: i.user.id, reason, at: new Date().toISOString(), messageId: msg.id });
-  store.save();
+  await store.save();
   await i.editReply(`Vouch posted for ${safe(user.username)}. They now have ${list.length} vouch(es).`);
   void push.notify(i.guild, 'vouch', 'New vouch', `${i.user.username} vouched for ${user.username}`, `/g/${i.guildId}/vouches`, ch).catch(console.error);
 }
@@ -276,7 +277,7 @@ bot.on('interactionCreate', async i => {
           ownerRoleId: ownerRole?.id || data.config.ownerRoleId || null,
           coOwnerRoleId: coOwnerRole?.id || data.config.coOwnerRoleId || null
         };
-        store.save();
+        await store.save();
         return i.reply(privateReply('Configured. Keep the applications channel private to staff. Select Owner and Co Owner roles in /setup to enable level controls, then post ticket and application panels.'));
       }
       if (i.commandName === 'panel') {
@@ -311,7 +312,7 @@ bot.on('interactionCreate', async i => {
         const amount = i.options.getInteger('amount');
         const changed = levels.change(data, user.id, action === 'add' ? amount : -amount);
         if (!changed) return i.reply(privateReply(action === 'remove' ? `This member has only ${levels.balance(data, user.id)} levels.` : 'That balance is too large.'));
-        store.save();
+        await store.save();
         await i.reply(privateReply(`${action === 'add' ? 'Added' : 'Removed'} ${amount.toLocaleString()} levels ${action === 'add' ? 'to' : 'from'} ${safe(user.username)}. New balance: ${levels.balance(data, user.id).toLocaleString()}.`));
         return log(i.guild, data.config, `Levels ${action === 'add' ? 'added to' : 'removed from'} ${user.id}: ${amount}, by ${i.user.id}.`);
       }
@@ -330,7 +331,7 @@ bot.on('interactionCreate', async i => {
         const answers = Array.from({ length: 5 }, (_, n) => i.options.getString(`answer_${n + 1}`));
         await i.deferReply({ flags: MessageFlags.Ephemeral });
         const message = await polls.create(i.guild, channel, i.options.getString('question'), answers, i.options.getInteger('hours') || 24);
-        polls.record(data, store, message, i.user.id);
+        await polls.record(data, store, message, i.user.id);
         return i.editReply(`Poll posted in ${channel}: ${message.url}`);
       }
       if (i.commandName === 'giveaway') return giveaways.command(i, data, staff(i, data.config), levels.canManage(i, data.config));
@@ -383,4 +384,11 @@ bot.once('clientReady', () => {
   giveaways.sweep().catch(console.error);
   setInterval(() => giveaways.sweep().catch(console.error), 15000);
 });
-bot.login(process.env.DISCORD_TOKEN);
+store.init().then(async () => {
+  startWebsite();
+  await bot.login(process.env.DISCORD_TOKEN);
+}).catch(error => {
+  console.error('Ironclad Bot could not start:', error);
+  process.exitCode = 1;
+  process.exit();
+});

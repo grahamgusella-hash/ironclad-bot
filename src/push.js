@@ -25,7 +25,7 @@ module.exports = (bot, store) => {
         !/^[A-Za-z0-9_-]{16,40}$/.test(subscription.keys?.auth || ''))
       throw new Error('Invalid phone notification subscription.');
   }
-  function update(action, userId, guildId, subscription) {
+  async function update(action, userId, guildId, subscription) {
     if (!enabled) throw new Error('Phone notifications are not configured yet.');
     validate(subscription);
     const key = keyFor(subscription.endpoint);
@@ -36,7 +36,7 @@ module.exports = (bot, store) => {
       if (existing?.userId === userId) {
         existing.guildIds = existing.guildIds.filter(id => id !== guildId);
         if (!existing.guildIds.length) delete records[key];
-        store.save();
+        await store.save();
       }
       return false;
     }
@@ -46,16 +46,16 @@ module.exports = (bot, store) => {
     const otherDevices = Object.values(records).filter(r => r.userId === userId && r.guildIds.includes(guildId)).length;
     if (!existing && otherDevices >= 10) throw new Error('Too many phones subscribed to this server.');
     records[key] = { userId, guildIds, subscription };
-    store.save();
+    await store.save();
     return true;
   }
-  function removeUser(userId) {
+  async function removeUser(userId) {
     const records = saved();
     let changed = false;
     for (const [key, record] of Object.entries(records)) {
       if (record.userId === userId) { delete records[key]; changed = true; }
     }
-    if (changed) store.save();
+    if (changed) await store.save();
   }
   async function notify(guild, type, title, body, target, channel) {
     if (!enabled) return;
@@ -72,7 +72,7 @@ module.exports = (bot, store) => {
           JSON.stringify({ title: `${guild.name}: ${title}`, body, url: target, tag: `${type}-${guild.id}-${target.split('/').at(-1)}` }),
           { TTL: 3600 });
       } catch (error) {
-        if ([404, 410].includes(error.statusCode)) { delete saved()[key]; store.save(); }
+        if ([404, 410].includes(error.statusCode)) { delete saved()[key]; await store.save(); }
         else console.error('Phone notification failed:', error.statusCode || error.message);
       }
     }

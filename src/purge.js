@@ -86,13 +86,13 @@ module.exports = (bot, store) => {
           const channel = await i.guild.channels.fetch(id).catch(() => null);
           if (!channel || !isTicket(channel, data)) {
             skipped++;
-            if (!channel && Object.hasOwn(data.tickets, id)) { clearApplication(data, id); delete data.tickets[id]; store.save(); }
+            if (!channel && Object.hasOwn(data.tickets, id)) { clearApplication(data, id); delete data.tickets[id]; await store.save(); }
             continue;
           }
           await channel.delete(`Ticket purge confirmed by ${i.user.id}`);
           clearApplication(data, id);
           delete data.tickets[id];
-          store.save();
+          await store.save();
           deleted++;
         } catch (error) {
           failed++;

@@ -24,13 +24,13 @@ async function create(guild, channel, question, answers, hours) {
   return channel.send({ poll, allowedMentions: { parse: [] } });
 }
 
-function record(data, store, message, authorId) {
+async function record(data, store, message, authorId) {
   data.polls ||= {};
   data.polls[message.id] = {
     channelId: message.channelId, question: message.poll?.question?.text || 'Poll',
     authorId, createdAt: new Date(message.createdTimestamp).toISOString()
   };
-  store.save();
+  await store.save();
 }
 
 async function discover(guild, data, store, channels) {
@@ -42,11 +42,11 @@ async function discover(guild, data, store, channels) {
     if (!messages) continue;
     for (const message of messages.values()) {
       if (message.author?.id === guild.client.user.id && message.poll)
-        record(data, store, message, message.author.id);
+        await record(data, store, message, message.author.id);
     }
   }
   data.pollsScannedAt = new Date().toISOString();
-  store.save();
+  await store.save();
 }
 
 module.exports = { create, validate, record, discover };

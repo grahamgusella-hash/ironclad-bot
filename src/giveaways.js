@@ -48,7 +48,7 @@ module.exports = (bot, store) => {
     };
     const msg = await channel.send({ embeds: [embed(record)], allowedMentions: { parse: [] } });
     data.giveaways[msg.id] = record;
-    store.save();
+    await store.save();
     await msg.edit({ components: controls(msg.id) });
     return msg;
   }
@@ -74,7 +74,7 @@ module.exports = (bot, store) => {
       record.winners = winners;
       record.status = 'ended';
       record.endedAt = Date.now();
-      store.save();
+      await store.save();
       await message.edit({ embeds: [embed(record)], components: controls(messageId, true), allowedMentions: { parse: [] } });
       await channel.send({ content: record.winners.length
         ? `🎉 Giveaway ended! ${record.winners.map(id => `<@${id}>`).join(', ')} ${record.kind === 'levels' ? `each received **${record.levels.toLocaleString()} levels**` : `won **${safe(record.prize)}**`}. Congratulations!`
@@ -118,7 +118,7 @@ module.exports = (bot, store) => {
     const msg = await i.channel.messages.fetch(id);
     if (record.kind === 'levels') levels.change(data, next[0], record.levels);
     record.winners.push(next[0]);
-    store.save();
+    await store.save();
     await msg.edit({ embeds: [embed(record)], allowedMentions: { parse: [] } });
     await i.channel.send({ content: `🎉 Reroll for **${safe(record.prize)}**: <@${next[0]}> is the new winner!${record.kind === 'levels' ? ` They received ${record.levels.toLocaleString()} levels.` : ''}`, allowedMentions: { users: next } });
     return i.editReply('New winner drawn.');
@@ -132,7 +132,7 @@ module.exports = (bot, store) => {
     if (i.user.bot) return i.reply(privateReply('Bots cannot enter giveaways.'));
     if (record.entries.includes(i.user.id)) return i.reply(privateReply('You have already entered.'));
     record.entries.push(i.user.id);
-    store.save();
+    await store.save();
     await i.reply(privateReply('You are entered. Good luck!'));
     await i.message.edit({ embeds: [embed(record)], components: controls(id), allowedMentions: { parse: [] } });
   }

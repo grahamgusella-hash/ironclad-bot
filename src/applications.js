@@ -35,7 +35,7 @@ async function decide({ guild, data, store, bot, userId, decision, reviewer, rol
     app.reviewedBy = reviewer.id;
     app.reviewedAt = new Date().toISOString();
     if (role) app.assignedRoleId = role.id;
-    store.save();
+    await store.save();
     const channel = await guild.channels.fetch(app.channelId).catch(() => null);
     if (channel?.isTextBased()) {
       const message = await channel.messages.fetch(app.messageId).catch(() => null);
