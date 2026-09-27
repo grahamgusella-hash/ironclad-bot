@@ -9,8 +9,9 @@ function load() {
 }
 const state = load();
 function guild(id) {
-  const record = state.guilds[id] ||= { config: {}, tickets: {}, applications: {}, vouches: {}, giveaways: {} };
+  const record = state.guilds[id] ||= { config: {}, tickets: {}, applications: {}, vouches: {}, giveaways: {}, levels: {} };
   record.giveaways ||= {};
+  record.levels ||= {};
   return record;
 }
 function save() {

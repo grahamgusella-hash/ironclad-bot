@@ -3,6 +3,7 @@ const {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder,
   MessageFlags, PermissionFlagsBits
 } = require('discord.js');
+const levels = require('./levels');
 
 function safe(value) { return String(value).replace(/@/g, '@\u200b').replace(/[`*_~|>]/g, ''); }
 const privateReply = content => ({ content, flags: MessageFlags.Ephemeral });
@@ -16,7 +17,7 @@ function embed(record) {
   return new EmbedBuilder().setTitle(record.status === 'open' ? '🎉 Giveaway' : '🎉 Giveaway ended')
     .setColor(record.status === 'open' ? 0x5865f2 : 0x2ecc71)
     .addFields(
-      { name: 'Prize', value: safe(record.prize) },
+      { name: record.kind === 'levels' ? 'Levels per winner' : 'Prize', value: record.kind === 'levels' ? String(record.levels) : safe(record.prize) },
       { name: 'Winners', value: String(record.winnerCount), inline: true },
       { name: 'Entries', value: String(record.entries.length), inline: true },
       { name: record.status === 'open' ? 'Ends' : 'Ended', value: `<t:${Math.floor(record.endAt / 1000)}:F>` },
@@ -44,31 +45,43 @@ module.exports = (bot, store) => {
       const channel = await guild.channels.fetch(record.channelId);
       if (!channel?.isTextBased()) throw new Error(`Giveaway channel unavailable: ${record.channelId}`);
       const message = await channel.messages.fetch(messageId);
-      record.winners = draw(record, record.winnerCount);
+      const winners = draw(record, record.winnerCount);
+      if (record.kind === 'levels') {
+        const data = store.guild(guildId);
+        if (winners.some(id => !Number.isSafeInteger(levels.balance(data, id) + record.levels)))
+          throw new Error('A winner has reached the maximum supported level balance');
+        for (const id of winners) levels.change(data, id, record.levels);
+      }
+      record.winners = winners;
       record.status = 'ended';
       record.endedAt = Date.now();
       store.save();
       await message.edit({ embeds: [embed(record)], components: controls(messageId, true), allowedMentions: { parse: [] } });
       await channel.send({ content: record.winners.length
-        ? `🎉 Giveaway ended! ${record.winners.map(id => `<@${id}>`).join(', ')} won **${safe(record.prize)}**. Congratulations!`
+        ? `🎉 Giveaway ended! ${record.winners.map(id => `<@${id}>`).join(', ')} ${record.kind === 'levels' ? `each received **${record.levels.toLocaleString()} levels**` : `won **${safe(record.prize)}**`}. Congratulations!`
         : `Giveaway ended: **${safe(record.prize)}**. No one entered.`,
         allowedMentions: { users: record.winners } });
       return true;
     } finally { inProgress.delete(key); }
   }
 
-  async function command(i, data, isStaff) {
-    if (!isStaff) return i.reply(privateReply('Only staff can manage giveaways.'));
+  async function command(i, data, isStaff, canManageLevels) {
     const action = i.options.getSubcommand();
-    if (action === 'start') {
+    if (action === 'level' ? !canManageLevels : !isStaff && !canManageLevels)
+      return i.reply(privateReply(action === 'level' ? 'Only the configured Owner or Co Owner role can start level giveaways.' : 'Only staff can manage giveaways.'));
+    if (action === 'start' || action === 'level') {
       const self = await i.guild.members.fetchMe();
       if (!i.channel?.isTextBased() || !i.channel.permissionsFor(self)?.has([
         PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks,
         PermissionFlagsBits.ReadMessageHistory
       ])) return i.reply(privateReply('I need View Channel, Send Messages, Embed Links, and Read Message History here.'));
       const minutes = i.options.getInteger('minutes');
+      const levelAmount = action === 'level' ? i.options.getInteger('levels') : null;
       const record = {
-        prize: i.options.getString('prize'), winnerCount: i.options.getInteger('winners') || 1,
+        kind: action === 'level' ? 'levels' : 'standard',
+        prize: action === 'level' ? `${levelAmount} levels each` : i.options.getString('prize'),
+        ...(action === 'level' ? { levels: levelAmount } : {}),
+        winnerCount: i.options.getInteger('winners') || 1,
         hostId: i.user.id, hostName: safe(i.user.username), channelId: i.channelId,
         endAt: Date.now() + minutes * 60000, entries: [], winners: [], status: 'open'
       };
@@ -83,6 +96,8 @@ module.exports = (bot, store) => {
     if (!/^\d{17,22}$/.test(id)) return i.reply(privateReply('Enter a valid giveaway message ID.'));
     const record = data.giveaways[id];
     if (!record || record.channelId !== i.channelId) return i.reply(privateReply('No giveaway with that message ID exists in this channel.'));
+    if (record.kind === 'levels' && !canManageLevels)
+      return i.reply(privateReply('Only the configured Owner or Co Owner role can end or reroll level giveaways.'));
     if (action === 'end') {
       if (record.status !== 'open') return i.reply(privateReply('This giveaway has already ended.'));
       await i.deferReply({ flags: MessageFlags.Ephemeral });
@@ -92,12 +107,15 @@ module.exports = (bot, store) => {
     if (record.status !== 'ended') return i.reply(privateReply('End the giveaway before rerolling.'));
     const next = draw(record, 1, record.winners);
     if (!next.length) return i.reply(privateReply('No eligible entrants remain for a reroll.'));
+    if (record.kind === 'levels' && !Number.isSafeInteger(levels.balance(data, next[0]) + record.levels))
+      return i.reply(privateReply('This winner has reached the maximum supported level balance.'));
     await i.deferReply({ flags: MessageFlags.Ephemeral });
     const msg = await i.channel.messages.fetch(id);
+    if (record.kind === 'levels') levels.change(data, next[0], record.levels);
     record.winners.push(next[0]);
     store.save();
     await msg.edit({ embeds: [embed(record)], allowedMentions: { parse: [] } });
-    await i.channel.send({ content: `🎉 Reroll for **${safe(record.prize)}**: <@${next[0]}> is the new winner!`, allowedMentions: { users: next } });
+    await i.channel.send({ content: `🎉 Reroll for **${safe(record.prize)}**: <@${next[0]}> is the new winner!${record.kind === 'levels' ? ` They received ${record.levels.toLocaleString()} levels.` : ''}`, allowedMentions: { users: next } });
     return i.editReply('New winner drawn.');
   }
 

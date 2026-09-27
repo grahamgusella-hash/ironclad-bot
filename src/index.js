@@ -5,6 +5,7 @@ const {
   TextInputBuilder, TextInputStyle, MessageFlags, EmbedBuilder
 } = require('discord.js');
 const store = require('./store');
+const levels = require('./levels');
 
 if (!process.env.DISCORD_TOKEN) throw new Error('Missing DISCORD_TOKEN in .env');
 const bot = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -29,7 +30,7 @@ async function log(guild, cfg, content) {
 async function openTicket(i, data) {
   const cfg = data.config;
   if (!configValid(cfg)) return i.reply(privateReply('An admin must run /setup first.'));
-  const prior = Object.entries(data.tickets).find(([, t]) => t.ownerId === i.user.id && t.status === 'open');
+  const prior = Object.entries(data.tickets).find(([, t]) => t.ownerId === i.user.id && t.status === 'open' && t.type !== 'withdrawal');
   if (prior) {
     const ch = await i.guild.channels.fetch(prior[0]).catch(() => null);
     if (ch) return i.reply(privateReply(`You already have an open ticket: ${ch}.`));
@@ -54,6 +55,49 @@ async function openTicket(i, data) {
     allowedMentions: { users: [i.user.id] } });
   await i.editReply(`Your ticket is ready: ${channel}.`);
   await log(i.guild, cfg, `Ticket opened: ${channel.name} (${channel.id}) by ${i.user.id}`);
+}
+
+async function withdraw(i, data) {
+  const cfg = data.config;
+  if (!configValid(cfg)) return i.reply(privateReply('An admin must run /setup first.'));
+  const amount = i.options.getInteger('amount');
+  if (i.user.bot || !Number.isSafeInteger(amount) || amount < 1 || amount > levels.MAX_AMOUNT)
+    return i.reply(privateReply('Choose between 1 and 1,000,000 levels.'));
+  await i.deferReply({ flags: MessageFlags.Ephemeral });
+  const prior = Object.entries(data.tickets).find(([, ticket]) => ticket.ownerId === i.user.id && ticket.status === 'open' && ticket.type === 'withdrawal');
+  if (prior) {
+    const channel = await i.guild.channels.fetch(prior[0]).catch(() => null);
+    if (channel) return i.editReply(`You already have a withdrawal ticket: ${channel}.`);
+    delete data.tickets[prior[0]];
+    store.save();
+  }
+  // Reserve the levels before awaiting Discord, so simultaneous requests cannot spend twice.
+  if (!levels.change(data, i.user.id, -amount)) return i.editReply(`You have ${levels.balance(data, i.user.id)} levels available.`);
+  store.save();
+  let channel;
+  try {
+    const roleIds = [...new Set([cfg.staffRoleId, cfg.ownerRoleId, cfg.coOwnerRoleId].filter(Boolean))];
+    channel = await i.guild.channels.create({
+      name: `withdraw-${i.user.username.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 20) || 'member'}`,
+      type: ChannelType.GuildText, parent: cfg.categoryId,
+      permissionOverwrites: [
+        { id: i.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+        { id: i.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+        { id: bot.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageChannels] },
+        ...roleIds.map(id => ({ id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }))
+      ]
+    });
+  } catch (error) {
+    levels.change(data, i.user.id, amount);
+    store.save();
+    throw error;
+  }
+  data.tickets[channel.id] = { ownerId: i.user.id, type: 'withdrawal', amount, status: 'open', createdAt: new Date().toISOString() };
+  store.save();
+  await channel.send({ content: `<@${i.user.id}> requested to withdraw **${amount.toLocaleString()} levels**. Staff can handle this request here.`,
+    components: [row('ticket:close', 'Close ticket', ButtonStyle.Danger)], allowedMentions: { users: [i.user.id] } });
+  await i.editReply(`Withdrawal requested: ${channel}. ${amount.toLocaleString()} levels were removed from your balance.`);
+  await log(i.guild, cfg, `Withdrawal requested: ${channel.id} by ${i.user.id} for ${amount} levels.`);
 }
 
 async function ticketAction(i, data, action) {
@@ -176,6 +220,10 @@ bot.on('interactionCreate', async i => {
         if (!i.memberPermissions.has(PermissionFlagsBits.ManageGuild)) return i.reply(privateReply('Manage Server permission is required.'));
         const staffRole = i.options.getRole('staff_role');
         if (staffRole.id === i.guild.id || staffRole.managed) return i.reply(privateReply('Choose a regular staff role, not @everyone or an integration role.'));
+        const ownerRole = i.options.getRole('owner_role');
+        const coOwnerRole = i.options.getRole('co_owner_role');
+        if ([ownerRole, coOwnerRole].some(role => role && (role.id === i.guild.id || role.managed)))
+          return i.reply(privateReply('Owner and Co Owner must be regular roles, not @everyone or integration roles.'));
         const applications = i.options.getChannel('applications_channel');
         const vouches = i.options.getChannel('vouches_channel');
         if (applications.id === vouches.id) return i.reply(privateReply('Choose separate applications and vouches channels.'));
@@ -186,10 +234,12 @@ bot.on('interactionCreate', async i => {
         data.config = {
           staffRoleId: staffRole.id, categoryId: i.options.getChannel('ticket_category').id,
           applicationsChannelId: applications.id, vouchesChannelId: vouches.id,
-          logsChannelId: i.options.getChannel('logs_channel')?.id || null
+          logsChannelId: i.options.getChannel('logs_channel')?.id || null,
+          ownerRoleId: ownerRole?.id || data.config.ownerRoleId || null,
+          coOwnerRoleId: coOwnerRole?.id || data.config.coOwnerRoleId || null
         };
         store.save();
-        return i.reply(privateReply('Configured. Keep the applications channel private to staff, then use `/panel type:tickets` and `/panel type:applications` where members should see the buttons.'));
+        return i.reply(privateReply('Configured. Keep the applications channel private to staff. Select Owner and Co Owner roles in /setup to enable level controls, then post ticket and application panels.'));
       }
       if (i.commandName === 'panel') {
         if (!i.memberPermissions.has(PermissionFlagsBits.ManageGuild)) return i.reply(privateReply('Manage Server permission is required.'));
@@ -209,7 +259,26 @@ bot.on('interactionCreate', async i => {
         return i.showModal(applicationModal());
       }
       if (i.commandName === 'vouch') return addVouch(i, data);
-      if (i.commandName === 'giveaway') return giveaways.command(i, data, staff(i, data.config));
+      if (i.commandName === 'level') {
+        const action = i.options.getSubcommand();
+        if (action === 'balance') return i.reply(privateReply(`You have **${levels.balance(data, i.user.id).toLocaleString()} levels** available.`));
+        if (!levels.canManage(i, data.config)) return i.reply(privateReply('Only members with the configured Owner or Co Owner role can change levels. Ask an admin to select those roles in /setup.'));
+        const user = i.options.getUser('user');
+        if (user.bot || !await i.guild.members.fetch(user.id).catch(() => null)) return i.reply(privateReply('Choose a human member of this server.'));
+        const amount = i.options.getInteger('amount');
+        const changed = levels.change(data, user.id, action === 'add' ? amount : -amount);
+        if (!changed) return i.reply(privateReply(action === 'remove' ? `This member has only ${levels.balance(data, user.id)} levels.` : 'That balance is too large.'));
+        store.save();
+        await i.reply(privateReply(`${action === 'add' ? 'Added' : 'Removed'} ${amount.toLocaleString()} levels ${action === 'add' ? 'to' : 'from'} ${safe(user.username)}. New balance: ${levels.balance(data, user.id).toLocaleString()}.`));
+        return log(i.guild, data.config, `Levels ${action === 'add' ? 'added to' : 'removed from'} ${user.id}: ${amount}, by ${i.user.id}.`);
+      }
+      if (i.commandName === 'leaderboard') {
+        const ranked = Object.entries(data.levels).filter(([, value]) => Number.isSafeInteger(value) && value > 0)
+          .sort((a, b) => b[1] - a[1]).slice(0, 10);
+        return i.reply({ content: ranked.length ? `**${safe(i.guild.name)} level leaderboard**\n${ranked.map(([id, amount], n) => `${n + 1}. <@${id}> — ${amount.toLocaleString()} levels`).join('\n')}` : 'No one has levels yet.', allowedMentions: mentions });
+      }
+      if (i.commandName === 'withdraw') return withdraw(i, data);
+      if (i.commandName === 'giveaway') return giveaways.command(i, data, staff(i, data.config), levels.canManage(i, data.config));
       if (i.commandName === 'vouches') {
         const user = i.options.getUser('user');
         const list = data.vouches[user.id] || [];
