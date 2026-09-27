@@ -24,4 +24,29 @@ async function create(guild, channel, question, answers, hours) {
   return channel.send({ poll, allowedMentions: { parse: [] } });
 }
 
-module.exports = { create, validate };
+function record(data, store, message, authorId) {
+  data.polls ||= {};
+  data.polls[message.id] = {
+    channelId: message.channelId, question: message.poll?.question?.text || 'Poll',
+    authorId, createdAt: new Date(message.createdTimestamp).toISOString()
+  };
+  store.save();
+}
+
+async function discover(guild, data, store, channels) {
+  data.polls ||= {};
+  // Bring in polls made before this release, without searching every message in the server.
+  if (data.pollsScannedAt) return;
+  for (const channel of channels.slice(0, 12)) {
+    const messages = await channel.messages.fetch({ limit: 50 }).catch(() => null);
+    if (!messages) continue;
+    for (const message of messages.values()) {
+      if (message.author?.id === guild.client.user.id && message.poll)
+        record(data, store, message, message.author.id);
+    }
+  }
+  data.pollsScannedAt = new Date().toISOString();
+  store.save();
+}
+
+module.exports = { create, validate, record, discover };

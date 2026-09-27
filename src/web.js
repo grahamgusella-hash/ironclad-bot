@@ -3,6 +3,7 @@ const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 const { PermissionFlagsBits, ChannelType } = require('discord.js');
 const polls = require('./polls');
+const applications = require('./applications');
 
 const sessions = new Map();
 const states = new Map();
@@ -78,7 +79,12 @@ async function discord(path, options = {}) {
   return response.json();
 }
 function numbers(raw, max) { const n = Number(raw); if (!/^\d+$/.test(String(raw)) || !Number.isSafeInteger(n) || n < 1 || n > max) throw new Error(`Enter a whole number between 1 and ${max}.`); return n; }
-function nav(guild) { const base = `/g/${guild.id}`; return `<nav><a href="${base}">Overview</a><a href="${base}/tickets">Tickets</a><a href="${base}/vouches">Vouches</a><a href="${base}/giveaways">Giveaways</a><a href="${base}/polls">Polls</a></nav>`; }
+function nav(guild) { const base = `/g/${guild.id}`; return `<nav><a href="${base}">Overview</a><a href="${base}/tickets">Tickets</a><a href="${base}/applications">Applications</a><a href="${base}/vouches">Vouches</a><a href="${base}/giveaways">Giveaways</a><a href="${base}/polls">Polls</a></nav>`; }
+async function reviewForm(guild, member, app, userId, actionUrl, csrf, availableRoles) {
+  if (app.status !== 'pending') return `<p class="muted">${esc(app.status)}${app.assignedRoleId ? ` · role ID ${esc(app.assignedRoleId)}` : ''}</p>`;
+  const roles = availableRoles || (applications.reviewerCanAssign(guild, member) ? await applications.assignableRoles(guild, member) : []);
+  return `<form method="post" action="${actionUrl}"><input type="hidden" name="csrf" value="${csrf}"><label for="role-${userId}">Role to give if approved</label><select id="role-${userId}" name="roleId"><option value="">Select a role</option>${roles.map(role => `<option value="${role.id}">${esc(role.name)}</option>`).join('')}</select><p class="row"><button name="decision" value="approved" ${roles.length ? '' : 'disabled'}>Approve and give role</button><button name="decision" value="rejected">Decline</button></p>${roles.length ? '' : '<p class="muted">Approving requires Manage Roles permission and a role below yours and the bot’s role. The bot also needs Manage Roles.</p>'}</form>`;
+}
 
 module.exports = (bot, store, giveaways, push) => async (req, res) => {
   let session;
@@ -155,7 +161,7 @@ module.exports = (bot, store, giveaways, push) => async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
       return res.end(JSON.stringify({ subscribed }));
     }
-    const match = /^\/g\/(\d{17,22})(?:\/(tickets|vouches|giveaways|polls))?(?:\/(\d{17,22}|start|create))?(?:\/(reply))?$/.exec(path);
+    const match = /^\/g\/(\d{17,22})(?:\/(tickets|applications|vouches|giveaways|polls))?(?:\/(\d{17,22}|start|create))?(?:\/(reply|review))?$/.exec(path);
     if (!match) return errorPage(res, 'Page not found.', 404, session);
     let [, guildId, section, ticketId, action] = match;
     if (section === 'giveaways' && ticketId === 'start') { ticketId = undefined; action = 'start'; }
@@ -179,8 +185,18 @@ module.exports = (bot, store, giveaways, push) => async (req, res) => {
         if (!reply || reply.length > 1800) throw new Error('Reply must be between 1 and 1,800 characters.');
         const channel = await guild.channels.fetch(ticketId).catch(() => null);
         if (!channel?.isTextBased()) throw new Error('Ticket channel unavailable.');
+        if (!channel.permissionsFor(member)?.has(PermissionFlagsBits.ViewChannel)) return errorPage(res, 'You cannot view this ticket.', 403, session);
         await channel.send({ content: `**${session.username.replace(/[@*`_~|>]/g, '')} · staff**\n${reply}`, allowedMentions: { parse: [] } });
         return redirect(res, `${base}/tickets/${ticketId}`);
+      }
+      if (section === 'applications' && ticketId && action === 'review') {
+        const decision = fields.get('decision');
+        if (!['approved', 'rejected'].includes(decision)) throw new Error('Choose an application decision.');
+        const app = data.applications[ticketId];
+        const reviewChannel = app && await guild.channels.fetch(app.channelId).catch(() => null);
+        if (!reviewChannel?.permissionsFor(member)?.has(PermissionFlagsBits.ViewChannel)) return errorPage(res, 'You cannot view this application.', 403, session);
+        await applications.decide({ guild, data, store, bot, userId: ticketId, decision, reviewer: member, roleId: fields.get('roleId') });
+        return redirect(res, `${base}/applications`);
       }
       if (section === 'giveaways' && action === 'start' && !ticketId) {
         const kind = fields.get('kind') === 'levels' ? 'levels' : 'standard';
@@ -200,8 +216,10 @@ module.exports = (bot, store, giveaways, push) => async (req, res) => {
         const channelId = fields.get('channel');
         if (!idPattern.test(channelId || '')) throw new Error('Choose a channel.');
         const channel = await guild.channels.fetch(channelId).catch(() => null);
+        if (!channel?.permissionsFor(member)?.has(PermissionFlagsBits.ViewChannel)) return errorPage(res, 'You cannot view that channel.', 403, session);
         const answers = (fields.get('answers') || '').split(/\r?\n/);
         const message = await polls.create(guild, channel, fields.get('question'), answers, fields.get('hours'));
+        polls.record(data, store, message, session.userId);
         return redirect(res, `${base}/polls?created=${message.id}&channel=${channel.id}`);
       }
       return errorPage(res, 'Action not found.', 404, session);
@@ -211,7 +229,7 @@ module.exports = (bot, store, giveaways, push) => async (req, res) => {
       const open = Object.values(data.tickets).filter(t => t.status === 'open').length;
       const vouches = Object.values(data.vouches).reduce((total, list) => total + list.length, 0);
       const notificationPanel = push?.enabled ? `<div class="card"><h2>Phone notifications</h2><p>Get alerts for new tickets, vouches, and withdrawals in this server.</p><button type="button" id="push-toggle" data-guild="${guildId}" data-csrf="${session.csrf}" data-key="${esc(push.publicKey)}">Enable notifications on this phone</button><p id="push-status" class="muted" role="status"></p></div>` : '<div class="card"><h2>Phone notifications</h2><p>Phone notifications are not configured yet.</p></div>';
-      return html(res, page(guild.name, `${heading}<p class="muted">Manage this server’s tickets, giveaways, and polls directly through Ironclad Bot.</p>${notificationPanel}<div class="grid"><div class="card"><h2>${open} open tickets</h2><a href="${base}/tickets">Answer tickets →</a></div><div class="card"><h2>${vouches} vouches</h2><a href="${base}/vouches">See vouches →</a></div><div class="card"><h2>${Object.values(data.giveaways).filter(g => g.status === 'open').length} active giveaways</h2><a href="${base}/giveaways">Manage giveaways →</a></div><div class="card"><h2>Polls</h2><a href="${base}/polls">Create a poll →</a></div></div>`, session));
+      return html(res, page(guild.name, `${heading}<p class="muted">Manage this server’s tickets, applications, giveaways, and polls directly through Ironclad Bot.</p>${notificationPanel}<div class="grid"><div class="card"><h2>${open} open tickets</h2><a href="${base}/tickets">Answer tickets →</a></div><div class="card"><h2>${Object.values(data.applications).filter(app => app.status === 'pending').length} pending applications</h2><a href="${base}/applications">Review applications →</a></div><div class="card"><h2>${vouches} vouches</h2><a href="${base}/vouches">See vouches →</a></div><div class="card"><h2>${Object.values(data.giveaways).filter(g => g.status === 'open').length} active giveaways</h2><a href="${base}/giveaways">Manage giveaways →</a></div><div class="card"><h2>Polls</h2><a href="${base}/polls">Create and see polls →</a></div></div>`, session));
     }
     if (section === 'tickets') {
       if (ticketId) {
@@ -219,13 +237,26 @@ module.exports = (bot, store, giveaways, push) => async (req, res) => {
         if (!ticket) return errorPage(res, 'Ticket not found.', 404, session);
         const channel = await guild.channels.fetch(ticketId).catch(() => null);
         if (!channel?.isTextBased()) return errorPage(res, 'Ticket channel unavailable.', 404, session);
+        if (!channel.permissionsFor(member)?.has(PermissionFlagsBits.ViewChannel)) return errorPage(res, 'You cannot view this ticket.', 403, session);
         const messages = [...(await channel.messages.fetch({ limit: 50 })).values()].reverse();
-        const lines = messages.map(msg => `<div class="message"><small>${esc(msg.author?.globalName || msg.author?.username || 'Unknown')} · ${esc(new Date(msg.createdTimestamp).toLocaleString())}</small><p>${esc(msg.content || msg.embeds?.[0]?.description || '[attachment or embed]')}</p>${msg.attachments.size ? '<small>Attachments are available in Discord.</small>' : ''}</div>`).join('');
+        const lines = messages.map(msg => `<div class="message"><small>${esc(msg.author?.globalName || msg.author?.username || 'Unknown')} · ${esc(new Date(msg.createdTimestamp).toLocaleString())}</small><p>${esc(msg.content || msg.embeds?.[0]?.description || '[attachment or embed]')}</p>${(msg.embeds || []).flatMap(embed => embed.fields || []).map(field => `<p><b>${esc(field.name)}:</b> ${esc(field.value)}</p>`).join('')}${msg.attachments.size ? '<small>Attachments are available in Discord.</small>' : ''}</div>`).join('');
         const form = ticket.status === 'open' ? `<form method="post" action="${base}/tickets/${ticketId}/reply"><input type="hidden" name="csrf" value="${session.csrf}"><label for="reply">Reply as staff</label><textarea id="reply" name="reply" maxlength="1800" required></textarea><p><button>Send reply to Discord</button></p></form>` : '<p class="muted">This ticket is closed. Reopen it in Discord to reply.</p>';
-        return html(res, page('Ticket', `${heading}<h2>#${esc(channel.name)} <span class="pill">${esc(ticket.status)}</span></h2><p class="muted">Opened by <code>${esc(ticket.ownerId)}</code>${ticket.type === 'withdrawal' ? ` · Withdrawal: ${esc(ticket.amount)} levels` : ''}</p><p><a href="https://discord.com/channels/${guildId}/${ticketId}">Open in Discord ↗</a></p>${lines || '<p>No messages yet.</p>'}<hr class="divider">${form}`, session));
+        const application = ticket.type === 'application' && data.applications[ticket.ownerId]?.channelId === ticketId ? data.applications[ticket.ownerId] : null;
+        const review = application ? `<hr class="divider"><h2>Application: ${esc(application.status)}</h2>${await reviewForm(guild, member, application, ticket.ownerId, `${base}/applications/${ticket.ownerId}/review`, session.csrf)}` : '';
+        return html(res, page('Ticket', `${heading}<h2>#${esc(channel.name)} <span class="pill">${esc(ticket.status)}</span></h2><p class="muted">Opened by <code>${esc(ticket.ownerId)}</code>${ticket.type === 'withdrawal' ? ` · Withdrawal: ${esc(ticket.amount)} levels` : ''}</p><p><a href="https://discord.com/channels/${guildId}/${ticketId}">Open in Discord ↗</a></p>${lines || '<p>No messages yet.</p>'}${review}<hr class="divider">${form}`, session));
       }
-      const rows = Object.entries(data.tickets).sort((a, b) => b[1].createdAt.localeCompare(a[1].createdAt)).slice(0, 100).map(([id, ticket]) => `<div class="card"><span class="pill">${esc(ticket.status)}</span> <b>${ticket.type === 'withdrawal' ? 'Withdrawal' : 'Ticket'}</b><p>${esc(ticket.ownerId)}${ticket.amount ? ` · ${esc(ticket.amount)} levels` : ''}</p><a href="${base}/tickets/${id}">Read and reply →</a></div>`).join('');
+      const rows = Object.entries(data.tickets).sort((a, b) => b[1].createdAt.localeCompare(a[1].createdAt)).slice(0, 100).map(([id, ticket]) => `<div class="card"><span class="pill">${esc(ticket.status)}</span> <b>${ticket.type === 'withdrawal' ? 'Withdrawal' : ticket.type === 'application' ? 'Application' : 'Ticket'}</b><p>${esc(ticket.ownerId)}${ticket.amount ? ` · ${esc(ticket.amount)} levels` : ''}</p><a href="${base}/tickets/${id}">Read and reply →</a></div>`).join('');
       return html(res, page('Tickets', `${heading}<h2>Tickets</h2><div class="grid">${rows || '<p>No tickets yet.</p>'}</div>`, session));
+    }
+    if (section === 'applications' && !ticketId) {
+      const roles = applications.reviewerCanAssign(guild, member) ? await applications.assignableRoles(guild, member) : [];
+      const rows = await Promise.all(Object.entries(data.applications).sort((a, b) => (b[1].submittedAt || '').localeCompare(a[1].submittedAt || '')).slice(0, 100).map(async ([userId, app]) => {
+        const channel = await guild.channels.fetch(app.channelId).catch(() => null);
+        if (!channel?.permissionsFor(member)?.has(PermissionFlagsBits.ViewChannel)) return '';
+        const form = await reviewForm(guild, member, app, userId, `${base}/applications/${userId}/review`, session.csrf, roles);
+        return `<div class="card"><span class="pill">${esc(app.status)}</span><h2>Application from ${esc(userId)}</h2><p><b>Requested role:</b> ${esc(app.role || 'Not specified')}</p><p><b>Experience:</b> ${esc(app.experience || 'See application in Discord')}</p><p><b>Why:</b> ${esc(app.why || 'See application in Discord')}</p><p><a href="https://discord.com/channels/${guildId}/${app.channelId}">Open in Discord ↗</a>${data.tickets[app.channelId] ? ` · <a href="${base}/tickets/${app.channelId}">Read and reply →</a>` : ''}</p>${form}</div>`;
+      }));
+      return html(res, page('Applications', `${heading}<h2>Applications</h2><div class="grid">${rows.join('') || '<p>No applications yet.</p>'}</div>`, session));
     }
     if (section === 'vouches' && !ticketId) {
       const rows = Object.entries(data.vouches).flatMap(([user, list]) => list.map(v => ({ user, ...v }))).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 150).map(v => `<div class="card"><b>For ${esc(v.user)}</b><p>${esc(v.reason)}</p><small class="muted">From ${esc(v.authorId)} · ${esc(new Date(v.at).toLocaleString())}</small></div>`).join('');
@@ -240,19 +271,31 @@ module.exports = (bot, store, giveaways, push) => async (req, res) => {
     }
     if (section === 'polls' && !ticketId) {
       const self = await guild.members.fetchMe();
-      const channels = [...guild.channels.cache.values()].filter(ch => ch.type === ChannelType.GuildText &&
-        ch.permissionsFor(self)?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendPolls]))
+      const viewable = [...guild.channels.cache.values()].filter(ch => ch.type === ChannelType.GuildText &&
+        ch.permissionsFor(self)?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory]) &&
+        ch.permissionsFor(member)?.has(PermissionFlagsBits.ViewChannel))
         .sort((a, b) => a.name.localeCompare(b.name));
+      const channels = viewable.filter(ch => ch.permissionsFor(self)?.has([PermissionFlagsBits.SendMessages, PermissionFlagsBits.SendPolls]));
+      await polls.discover(guild, data, store, viewable);
       const created = url.searchParams.get('created');
       const createdChannel = url.searchParams.get('channel');
-      const success = idPattern.test(created || '') && idPattern.test(createdChannel || '') ?
+      const success = idPattern.test(created || '') && idPattern.test(createdChannel || '') && data.polls?.[created]?.channelId === createdChannel ?
         `<p class="card success">Poll posted. <a href="https://discord.com/channels/${guildId}/${createdChannel}/${created}">View it in Discord ↗</a></p>` : '';
-      const form = `<div class="card"><h2>Create a poll</h2><p class="muted">Votes and results are handled by Discord.</p><form method="post" action="${base}/polls/create"><input type="hidden" name="csrf" value="${session.csrf}"><label for="poll-channel">Channel</label><select id="poll-channel" name="channel" required>${channels.map(ch => `<option value="${ch.id}">#${esc(ch.name)}</option>`).join('')}</select><label for="question">Question</label><input id="question" name="question" maxlength="300" required><label for="answers">Answers (one per line, 2–10)</label><textarea id="answers" name="answers" required placeholder="Yes&#10;No"></textarea><label for="hours">Duration in hours (1–768)</label><input id="hours" name="hours" type="number" min="1" max="768" required value="24"><p><button ${channels.length ? '' : 'disabled'}>Post poll in Discord</button></p></form></div>`;
-      return html(res, page('Polls', `${heading}${success}${form}`, session));
+      const form = `<div class="card"><h2>Create a poll</h2><p class="muted">Votes and results are handled by Discord.</p>${channels.length ? '' : '<p class="alert">No channels are available for polls. Give the bot View Channel, Send Messages, Read Message History, and Create Polls in a text channel.</p>'}<form method="post" action="${base}/polls/create"><input type="hidden" name="csrf" value="${session.csrf}"><label for="poll-channel">Channel</label><select id="poll-channel" name="channel" required>${channels.map(ch => `<option value="${ch.id}">#${esc(ch.name)}</option>`).join('')}</select><label for="question">Question</label><input id="question" name="question" maxlength="300" required><label for="answers">Answers (one per line, 2–10)</label><textarea id="answers" name="answers" required placeholder="Yes&#10;No"></textarea><label for="hours">Duration in hours (1–768)</label><input id="hours" name="hours" type="number" min="1" max="768" required value="24"><p><button ${channels.length ? '' : 'disabled'}>Post poll in Discord</button></p></form></div>`;
+      const recent = await Promise.all(Object.entries(data.polls || {}).sort((a, b) => (b[1].createdAt || '').localeCompare(a[1].createdAt || '')).slice(0, 40).map(async ([messageId, saved]) => {
+        const channel = viewable.find(ch => ch.id === saved.channelId);
+        if (!channel) return '';
+        const message = await channel.messages.fetch(messageId).catch(() => null);
+        const poll = message?.poll;
+        const answers = poll?.answers ? [...poll.answers.values()].map(answer => `<li>${esc(answer.text || 'Answer')} — ${Number(answer.voteCount || 0).toLocaleString()} votes</li>`).join('') : '';
+        const ended = poll?.resultsFinalized || (poll?.expiresTimestamp && poll.expiresTimestamp <= Date.now());
+        return `<div class="card"><span class="pill">${message ? ended ? 'ended' : 'open' : 'unavailable'}</span><h2>${esc(poll?.question?.text || saved.question)}</h2><p class="muted">#${esc(channel.name)} · ${esc(new Date(saved.createdAt).toLocaleString())}</p>${answers ? `<ul>${answers}</ul>` : ''}<a href="https://discord.com/channels/${guildId}/${saved.channelId}/${messageId}">Open poll in Discord ↗</a></div>`;
+      }));
+      return html(res, page('Polls', `${heading}${success}${form}<h2>Recent polls</h2><div class="grid">${recent.join('') || '<p>No polls found yet. Create one above.</p>'}</div>`, session));
     }
     return errorPage(res, 'Page not found.', 404, session);
   } catch (err) {
     console.error('Dashboard request failed:', err);
-    return errorPage(res, err.message?.startsWith('I need ') || /^(Enter|Choose|Prize|Reply|Session|Request|This ticket|Only Owner|Ticket channel|Poll)/.test(err.message || '') ? err.message : 'The dashboard could not complete that request. Check the bot permissions and try again.', 400, session);
+    return errorPage(res, err.message?.startsWith('I need ') || /^(Enter|Choose|Prize|Reply|Session|Request|This ticket|This application|The applicant|Manage Roles|Only Owner|Ticket channel|Poll)/.test(err.message || '') ? err.message : 'The dashboard could not complete that request. Check the bot permissions and try again.', 400, session);
   }
 };

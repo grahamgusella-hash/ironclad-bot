@@ -5,7 +5,12 @@ const { ChannelType, PermissionFlagsBits, MessageFlags, ActionRowBuilder, Button
 module.exports = (bot, store) => {
   const pending = new Map();
   const active = new Set();
-  const ticketName = /^(ticket|closed|withdraw)-/;
+  const ticketName = /^(ticket|closed|withdraw|apply)-/;
+  function clearApplication(data, id) {
+    for (const app of Object.values(data.applications)) {
+      if (app.channelId === id && app.status === 'pending') app.status = 'canceled';
+    }
+  }
 
   function isTicket(channel, data) {
     if (!channel || channel.type !== ChannelType.GuildText) return false;
@@ -37,7 +42,7 @@ module.exports = (bot, store) => {
     pending.set(key, { guildId: i.guildId, requesterId: i.user.id, ids, expires: Date.now() + 120000 });
     const timer = setTimeout(() => pending.delete(key), 120000);
     timer.unref?.();
-    return i.editReply({ content: `**Ticket purge preview for ${i.guild.name}**\n${ids.length} ticket channel(s) will be permanently deleted, including open, closed, and withdrawal tickets. Their messages cannot be recovered. This will not change level balances, applications, vouches, or giveaways.\nConfirm within 2 minutes to delete these ${ids.length} ticket channels.`,
+    return i.editReply({ content: `**Ticket purge preview for ${i.guild.name}**\n${ids.length} ticket channel(s) will be permanently deleted, including open, closed, withdrawal, and application tickets. Their messages cannot be recovered. Pending applications in deleted tickets will be canceled so members may apply again. Vouches, giveaways, and level balances are unchanged.\nConfirm within 2 minutes to delete these ${ids.length} ticket channels.`,
       components: [new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`purge:confirm:${key}`).setLabel(`Delete ${ids.length} tickets`).setStyle(ButtonStyle.Danger).setDisabled(!ids.length),
         new ButtonBuilder().setCustomId(`purge:cancel:${key}`).setLabel('Cancel').setStyle(ButtonStyle.Secondary))] });
@@ -81,10 +86,11 @@ module.exports = (bot, store) => {
           const channel = await i.guild.channels.fetch(id).catch(() => null);
           if (!channel || !isTicket(channel, data)) {
             skipped++;
-            if (!channel && Object.hasOwn(data.tickets, id)) { delete data.tickets[id]; store.save(); }
+            if (!channel && Object.hasOwn(data.tickets, id)) { clearApplication(data, id); delete data.tickets[id]; store.save(); }
             continue;
           }
           await channel.delete(`Ticket purge confirmed by ${i.user.id}`);
+          clearApplication(data, id);
           delete data.tickets[id];
           store.save();
           deleted++;

@@ -3,11 +3,12 @@ const http = require('node:http');
 const {
   Client, GatewayIntentBits, ChannelType, PermissionFlagsBits,
   ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder,
-  TextInputBuilder, TextInputStyle, MessageFlags, EmbedBuilder
+  TextInputBuilder, TextInputStyle, MessageFlags, EmbedBuilder, RoleSelectMenuBuilder
 } = require('discord.js');
 const store = require('./store');
 const levels = require('./levels');
 const polls = require('./polls');
+const applications = require('./applications');
 
 if (!process.env.DISCORD_TOKEN) throw new Error('Missing DISCORD_TOKEN in .env');
 const bot = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -139,6 +140,9 @@ async function ticketAction(i, data, action) {
     if (record.status !== 'closed') return i.reply(privateReply('Close the ticket before deleting it.'));
     await i.reply(privateReply('Deleting the closed ticket.'));
     await i.channel.delete(`Ticket deleted by ${i.user.id}`);
+    for (const app of Object.values(data.applications)) {
+      if (app.channelId === i.channelId && app.status === 'pending') app.status = 'canceled';
+    }
     delete data.tickets[i.channelId]; store.save();
     return log(i.guild, data.config, `Ticket deleted: ${i.channelId} by ${i.user.id}`);
   }
@@ -181,10 +185,28 @@ async function submitApplication(i, data) {
     new ButtonBuilder().setCustomId(`application:approve:${i.user.id}`).setLabel('Approve').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`application:reject:${i.user.id}`).setLabel('Reject').setStyle(ButtonStyle.Danger)
   );
-  const msg = await ch.send({ embeds: [embed], components: [buttons], allowedMentions: mentions });
-  data.applications[i.user.id] = { status: 'pending', messageId: msg.id, channelId: ch.id, role, submittedAt: new Date().toISOString() };
+  const roleIds = [...new Set([cfg.staffRoleId, cfg.ownerRoleId, cfg.coOwnerRoleId].filter(Boolean))];
+  const ticket = await i.guild.channels.create({
+    name: `apply-${i.user.username.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 20) || 'member'}`,
+    type: ChannelType.GuildText, parent: cfg.categoryId,
+    permissionOverwrites: [
+      { id: i.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+      { id: i.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+      { id: bot.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageChannels] },
+      ...roleIds.map(id => ({ id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }))
+    ]
+  });
+  let msg;
+  try {
+    msg = await ticket.send({ content: `<@${i.user.id}> Your application ticket is open. Staff can review it here.`,
+      embeds: [embed], components: [buttons], allowedMentions: { users: [i.user.id] } });
+  } catch (error) { await ticket.delete().catch(console.error); throw error; }
+  data.tickets[ticket.id] = { ownerId: i.user.id, type: 'application', status: 'open', createdAt: new Date().toISOString() };
+  data.applications[i.user.id] = { status: 'pending', messageId: msg.id, channelId: ticket.id, role, experience, why, submittedAt: new Date().toISOString() };
   store.save();
-  await i.editReply('Application submitted. Staff will review it.');
+  await i.editReply(`Application submitted. Your private ticket is ${ticket}.`);
+  void push.notify(i.guild, 'application', 'New application', `${i.user.username} submitted an application`, `/g/${i.guildId}/tickets/${ticket.id}`, ticket).catch(console.error);
+  await ch.send({ content: `New application from ${safe(i.user.username)}: ${ticket}`, allowedMentions: mentions }).catch(console.error);
 }
 
 async function reviewApplication(i, data, decision, userId) {
@@ -192,15 +214,16 @@ async function reviewApplication(i, data, decision, userId) {
   const app = data.applications[userId];
   if (!app || app.status !== 'pending' || app.messageId !== i.message.id || app.channelId !== i.channelId)
     return i.reply(privateReply('This application has already been handled.'));
-  await i.deferUpdate();
-  app.status = decision === 'approve' ? 'approved' : 'rejected';
-  app.reviewedBy = i.user.id; app.reviewedAt = new Date().toISOString(); store.save();
-  await i.message.edit({ components: [], embeds: [EmbedBuilder.from(i.message.embeds[0])
-    .setColor(decision === 'approve' ? 0x2ecc71 : 0xe74c3c)
-    .addFields({ name: 'Decision', value: `${app.status} by ${safe(i.user.username)}` })] });
-  const applicant = await bot.users.fetch(userId).catch(() => null);
-  if (applicant) await applicant.send(`Your application to **${safe(i.guild.name)}** was ${app.status}.`).catch(() => {});
-  await i.followUp(privateReply(`Application ${app.status}. The applicant was notified by DM if their DMs are open.`));
+  const reviewer = await i.guild.members.fetch({ user: i.user.id, force: true });
+  if (decision === 'approve') {
+    if (!applications.reviewerCanAssign(i.guild, reviewer)) return i.reply(privateReply('You need Manage Roles permission to approve and assign a role.'));
+    return i.reply({ flags: MessageFlags.Ephemeral, content: 'Choose the role to give this applicant:',
+      components: [new ActionRowBuilder().addComponents(new RoleSelectMenuBuilder()
+        .setCustomId(`application:assign:${userId}`).setPlaceholder('Choose a role').setMinValues(1).setMaxValues(1))] });
+  }
+  await i.deferReply({ flags: MessageFlags.Ephemeral });
+  await applications.decide({ guild: i.guild, data, store, bot, userId, decision: 'rejected', reviewer });
+  return i.editReply('Application declined.');
 }
 
 async function addVouch(i, data) {
@@ -307,6 +330,7 @@ bot.on('interactionCreate', async i => {
         const answers = Array.from({ length: 5 }, (_, n) => i.options.getString(`answer_${n + 1}`));
         await i.deferReply({ flags: MessageFlags.Ephemeral });
         const message = await polls.create(i.guild, channel, i.options.getString('question'), answers, i.options.getInteger('hours') || 24);
+        polls.record(data, store, message, i.user.id);
         return i.editReply(`Poll posted in ${channel}: ${message.url}`);
       }
       if (i.commandName === 'giveaway') return giveaways.command(i, data, staff(i, data.config), levels.canManage(i, data.config));
@@ -331,6 +355,17 @@ bot.on('interactionCreate', async i => {
       }
       const review = /^application:(approve|reject):(\d+)$/.exec(i.customId);
       if (review) return reviewApplication(i, data, review[1], review[2]);
+    }
+    if (i.isRoleSelectMenu()) {
+      const assign = /^application:assign:(\d{17,22})$/.exec(i.customId);
+      if (assign) {
+        if (!staff(i, data.config)) return i.reply(privateReply('Only staff can review applications.'));
+        const reviewer = await i.guild.members.fetch({ user: i.user.id, force: true });
+        await i.deferUpdate();
+        const role = await applications.decide({ guild: i.guild, data, store, bot, userId: assign[1],
+          decision: 'approved', reviewer, roleId: i.values[0] });
+        return i.followUp(privateReply(`Application approved. ${role.name} was assigned.`));
+      }
     }
     if (i.isModalSubmit() && i.customId === 'application:submit') return submitApplication(i, data);
   } catch (err) {
