@@ -7,6 +7,12 @@
     "start": "npm run deploy && node src/index.js",
     "deploy": "node src/deploy.js"
   },
-  "engines": { "node": ">=20.11.0" },
-  "dependencies": { "discord.js": "^14.22.1", "dotenv": "^16.6.1" }
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "dependencies": {
+    "discord.js": "^14.22.1",
+    "dotenv": "^16.6.1",
+    "web-push": "^3.6.7"
+  }
 }

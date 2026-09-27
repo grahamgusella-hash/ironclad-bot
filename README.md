@@ -32,6 +32,8 @@ The dashboard sessions are held in memory, so a redeploy signs users out. The bo
 
 On Android, open the dashboard URL in Chrome, tap the three-dot menu, and choose **Install app** (or **Add to Home screen**). Sign in with Discord as usual. The installed dashboard opens from your home screen in its own window. It needs an internet connection to view tickets and manage the bot; only a generic offline message is stored on the phone. On iPhone, open the dashboard in Safari and use **Share → Add to Home Screen**. This is an installable web app, not an APK or an app-store download.
 
+To receive phone alerts, open each server's dashboard overview in the installed app and tap **Enable notifications on this phone**. Allow notifications when prompted. Staff with access to the ticket or vouch channel receive alerts when someone opens a ticket, posts a vouch, or requests a level withdrawal. Tap an alert to open that item in the dashboard. The button can turn alerts off for that server; signing out clears saved phone subscriptions. Configure a stable `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` on the Render service before enabling alerts (generate a pair once with `npx web-push generate-vapid-keys`). Keep the private key secret and reuse the same pair after redeploys. Subscriptions are saved with the bot state file, so Render's Free Web Service can lose them on restart and will not receive events while asleep. Persistent storage and an always-on service are needed for reliable alerts.
+
 ## Install
 
 1. Create an application at [Discord Developer Portal](https://discord.com/developers/applications), name it **Ironclad Bot**, and add a Bot user. Copy its **bot token** and **application ID**. Never share the token.

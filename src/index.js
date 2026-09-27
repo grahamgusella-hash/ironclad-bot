@@ -12,13 +12,14 @@ const polls = require('./polls');
 if (!process.env.DISCORD_TOKEN) throw new Error('Missing DISCORD_TOKEN in .env');
 const bot = new Client({ intents: [GatewayIntentBits.Guilds] });
 const giveaways = require('./giveaways')(bot, store);
+const push = require('./push')(bot, store);
 const purge = require('./purge')(bot, store);
 const wipe = require('./wipe')(bot);
 // The website and bot share one process and the same per-server data store.
 if (process.env.PORT) {
   const port = Number(process.env.PORT);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid PORT');
-  http.createServer(require('./web')(bot, store, giveaways)).listen(port, '0.0.0.0',
+  http.createServer(require('./web')(bot, store, giveaways, push)).listen(port, '0.0.0.0',
     () => console.log(`Ironclad dashboard listening on port ${port}`));
 }
 const privateReply = content => ({ content, flags: MessageFlags.Ephemeral });
@@ -65,6 +66,7 @@ async function openTicket(i, data) {
     components: [row('ticket:close', 'Close ticket', ButtonStyle.Danger)],
     allowedMentions: { users: [i.user.id] } });
   await i.editReply(`Your ticket is ready: ${channel}.`);
+  void push.notify(i.guild, 'ticket', 'New ticket', `${i.user.username} opened a ticket`, `/g/${i.guildId}/tickets/${channel.id}`, channel).catch(console.error);
   await log(i.guild, cfg, `Ticket opened: ${channel.name} (${channel.id}) by ${i.user.id}`);
 }
 
@@ -108,6 +110,7 @@ async function withdraw(i, data) {
   await channel.send({ content: `<@${i.user.id}> requested to withdraw **${amount.toLocaleString()} levels**. Staff can handle this request here.`,
     components: [row('ticket:close', 'Close ticket', ButtonStyle.Danger)], allowedMentions: { users: [i.user.id] } });
   await i.editReply(`Withdrawal requested: ${channel}. ${amount.toLocaleString()} levels were removed from your balance.`);
+  void push.notify(i.guild, 'withdrawal', 'Withdrawal requested', `${i.user.username} requested ${amount.toLocaleString()} levels`, `/g/${i.guildId}/tickets/${channel.id}`, channel).catch(console.error);
   await log(i.guild, cfg, `Withdrawal requested: ${channel.id} by ${i.user.id} for ${amount} levels.`);
 }
 
@@ -220,6 +223,7 @@ async function addVouch(i, data) {
   list.push({ authorId: i.user.id, reason, at: new Date().toISOString(), messageId: msg.id });
   store.save();
   await i.editReply(`Vouch posted for ${safe(user.username)}. They now have ${list.length} vouch(es).`);
+  void push.notify(i.guild, 'vouch', 'New vouch', `${i.user.username} vouched for ${user.username}`, `/g/${i.guildId}/vouches`, ch).catch(console.error);
 }
 
 bot.on('interactionCreate', async i => {

@@ -80,7 +80,7 @@ async function discord(path, options = {}) {
 function numbers(raw, max) { const n = Number(raw); if (!/^\d+$/.test(String(raw)) || !Number.isSafeInteger(n) || n < 1 || n > max) throw new Error(`Enter a whole number between 1 and ${max}.`); return n; }
 function nav(guild) { const base = `/g/${guild.id}`; return `<nav><a href="${base}">Overview</a><a href="${base}/tickets">Tickets</a><a href="${base}/vouches">Vouches</a><a href="${base}/giveaways">Giveaways</a><a href="${base}/polls">Polls</a></nav>`; }
 
-module.exports = (bot, store, giveaways) => async (req, res) => {
+module.exports = (bot, store, giveaways, push) => async (req, res) => {
   let session;
   try {
     const url = params(req.url);
@@ -136,11 +136,25 @@ module.exports = (bot, store, giveaways) => async (req, res) => {
     }
     if (path === '/logout' && req.method === 'POST') {
       verifyPost(req, await body(req), session);
+      push?.removeUser(session.userId);
       sessions.delete(cookies(req).ironclad_session);
       setCookie(res, 'ironclad_session', '', 0);
       return redirect(res, '/');
     }
     if (!session) return redirect(res, '/');
+    if (path === '/push' && req.method === 'POST') {
+      const fields = await body(req); verifyPost(req, fields, session);
+      const guildId = fields.get('guildId');
+      const guild = bot.guilds.cache.get(guildId);
+      if (!guild) return errorPage(res, 'Server not found.', 404, session);
+      const cfg = store.guild(guildId).config;
+      const member = await guild.members.fetch({ user: session.userId, force: true }).catch(() => null);
+      if (!push?.isStaff(member, cfg)) return errorPage(res, 'Staff access required.', 403, session);
+      const subscription = JSON.parse(fields.get('subscription') || '{}');
+      const subscribed = push.update(fields.get('action'), session.userId, guildId, subscription);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+      return res.end(JSON.stringify({ subscribed }));
+    }
     const match = /^\/g\/(\d{17,22})(?:\/(tickets|vouches|giveaways|polls))?(?:\/(\d{17,22}|start|create))?(?:\/(reply))?$/.exec(path);
     if (!match) return errorPage(res, 'Page not found.', 404, session);
     let [, guildId, section, ticketId, action] = match;
@@ -196,7 +210,8 @@ module.exports = (bot, store, giveaways) => async (req, res) => {
     if (!section) {
       const open = Object.values(data.tickets).filter(t => t.status === 'open').length;
       const vouches = Object.values(data.vouches).reduce((total, list) => total + list.length, 0);
-      return html(res, page(guild.name, `${heading}<p class="muted">Manage this server’s tickets, giveaways, and polls directly through Ironclad Bot.</p><div class="grid"><div class="card"><h2>${open} open tickets</h2><a href="${base}/tickets">Answer tickets →</a></div><div class="card"><h2>${vouches} vouches</h2><a href="${base}/vouches">See vouches →</a></div><div class="card"><h2>${Object.values(data.giveaways).filter(g => g.status === 'open').length} active giveaways</h2><a href="${base}/giveaways">Manage giveaways →</a></div><div class="card"><h2>Polls</h2><a href="${base}/polls">Create a poll →</a></div></div>`, session));
+      const notificationPanel = push?.enabled ? `<div class="card"><h2>Phone notifications</h2><p>Get alerts for new tickets, vouches, and withdrawals in this server.</p><button type="button" id="push-toggle" data-guild="${guildId}" data-csrf="${session.csrf}" data-key="${esc(push.publicKey)}">Enable notifications on this phone</button><p id="push-status" class="muted" role="status"></p></div>` : '<div class="card"><h2>Phone notifications</h2><p>Phone notifications are not configured yet.</p></div>';
+      return html(res, page(guild.name, `${heading}<p class="muted">Manage this server’s tickets, giveaways, and polls directly through Ironclad Bot.</p>${notificationPanel}<div class="grid"><div class="card"><h2>${open} open tickets</h2><a href="${base}/tickets">Answer tickets →</a></div><div class="card"><h2>${vouches} vouches</h2><a href="${base}/vouches">See vouches →</a></div><div class="card"><h2>${Object.values(data.giveaways).filter(g => g.status === 'open').length} active giveaways</h2><a href="${base}/giveaways">Manage giveaways →</a></div><div class="card"><h2>Polls</h2><a href="${base}/polls">Create a poll →</a></div></div>`, session));
     }
     if (section === 'tickets') {
       if (ticketId) {
