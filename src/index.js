@@ -11,6 +11,7 @@ const levels = require('./levels');
 if (!process.env.DISCORD_TOKEN) throw new Error('Missing DISCORD_TOKEN in .env');
 const bot = new Client({ intents: [GatewayIntentBits.Guilds] });
 const giveaways = require('./giveaways')(bot, store);
+const purge = require('./purge')(bot);
 // The website and bot share one process and the same per-server data store.
 if (process.env.PORT) {
   const port = Number(process.env.PORT);
@@ -286,6 +287,7 @@ bot.on('interactionCreate', async i => {
         return i.reply({ content: ranked.length ? `**${safe(i.guild.name)} level leaderboard**\n${ranked.map(([id, amount], n) => `${n + 1}. <@${id}> — ${amount.toLocaleString()} levels`).join('\n')}` : 'No one has levels yet.', allowedMentions: mentions });
       }
       if (i.commandName === 'withdraw') return withdraw(i, data);
+      if (i.commandName === 'purge') return purge.preview(i);
       if (i.commandName === 'giveaway') return giveaways.command(i, data, staff(i, data.config), levels.canManage(i, data.config));
       if (i.commandName === 'vouches') {
         const user = i.options.getUser('user');
@@ -296,6 +298,7 @@ bot.on('interactionCreate', async i => {
       }
     }
     if (i.isButton()) {
+      if (i.customId.startsWith('purge:')) return purge.button(i);
       if (i.customId.startsWith('giveaway:enter:')) return giveaways.enter(i, data);
       if (i.customId === 'ticket:open') return openTicket(i, data);
       if (i.customId === 'ticket:close') return ticketAction(i, data, 'close');
