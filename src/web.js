@@ -52,7 +52,12 @@ async function body(req) {
   return new URLSearchParams(raw);
 }
 function verifyPost(req, fields, session) {
-  if (req.headers.origin !== origin) throw new Error('Request origin did not match the dashboard.');
+  // Render may serve a configured hostname that differs from PUBLIC_URL.
+  // Browser fetch metadata proves the form came from this exact origin;
+  // the per-session token below still prevents forged submissions.
+  if (req.headers['sec-fetch-site'] === 'cross-site' || req.headers['sec-fetch-site'] === 'same-site' ||
+      (req.headers['sec-fetch-site'] !== 'same-origin' && req.headers.origin !== origin))
+    throw new Error('Request origin did not match the dashboard.');
   const actual = fields.get('csrf') || '';
   if (!session || actual.length !== session.csrf.length || !timingSafeEqual(Buffer.from(actual), Buffer.from(session.csrf))) throw new Error('Session expired. Sign in again.');
 }
