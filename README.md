@@ -34,6 +34,8 @@ Node.js 20.11+ bot for multiple Discord servers. Set the bot's **display name** 
 
 The bot uses only the Guilds gateway intent; Message Content and Server Members privileged intents are not needed. It must retain its channel permissions, and the staff, Owner, and Co Owner roles must retain access to the ticket category. Closed ticket channels stay available to staff until deleted; there is no transcript export. `/ticket delete` permanently removes the Discord channel. Application submissions and vouches are not automatically moderated. Giveaway winners are drawn at random from entrants; the bot checks for ended giveaways every 15 seconds and catches up after restarting. It must stay online to end giveaways on schedule. For a single running instance, local JSON storage is sufficient; do not run two copies against the same data file. For hosted deployment, configure a persistent volume for `DATA_FILE`, or levels and withdrawals may be lost on restart.
 
+If deployed as a Render **Web Service**, the bot also listens on Render's `PORT` and provides `/health` for port checks. A Free Web Service can go to sleep and has no persistent disk, so it cannot keep giveaways on schedule or reliably retain level balances. Use a paid Background Worker and persistent disk (or a paid Web Service with a disk) for this bot.
+
 To change application questions, edit `applicationModal()` and the matching field reads in `src/index.js`, then restart the bot. To change slash command definitions, edit `src/commands.js` and rerun `npm run deploy`.
 
 ## Host on Render
