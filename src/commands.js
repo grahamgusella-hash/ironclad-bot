@@ -38,6 +38,10 @@ const commands = [
   new SlashCommandBuilder().setName('leaderboard').setDescription('Show this server’s level leaderboard'),
   new SlashCommandBuilder().setName('purge').setDescription('Server owner: ban all members the bot is allowed to ban')
     .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
+  new SlashCommandBuilder().setName('ban').setDescription('Ban a member from this server')
+    .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
+    .addUserOption(o => o.setName('user').setDescription('Member to ban').setRequired(true))
+    .addStringOption(o => o.setName('reason').setDescription('Reason for the ban (optional)').setMaxLength(300)),
   new SlashCommandBuilder().setName('withdraw').setDescription('Withdraw levels into a private staff ticket')
     .addIntegerOption(o => o.setName('amount').setDescription('Levels to withdraw').setRequired(true).setMinValue(1).setMaxValue(1000000)),
   new SlashCommandBuilder().setName('giveaway').setDescription('Run a prize giveaway')

@@ -287,6 +287,24 @@ bot.on('interactionCreate', async i => {
         return i.reply({ content: ranked.length ? `**${safe(i.guild.name)} level leaderboard**\n${ranked.map(([id, amount], n) => `${n + 1}. <@${id}> — ${amount.toLocaleString()} levels`).join('\n')}` : 'No one has levels yet.', allowedMentions: mentions });
       }
       if (i.commandName === 'withdraw') return withdraw(i, data);
+      if (i.commandName === 'ban') {
+        if (!i.memberPermissions?.has(PermissionFlagsBits.BanMembers))
+          return i.reply(privateReply('You need Ban Members permission to use /ban.'));
+        const user = i.options.getUser('user');
+        if (user.id === i.guild.ownerId || user.id === bot.user.id || user.id === i.user.id)
+          return i.reply(privateReply('You cannot ban the server owner, the bot, or yourself.'));
+        await i.deferReply({ flags: MessageFlags.Ephemeral });
+        const member = await i.guild.members.fetch({ user: user.id, force: true }).catch(() => null);
+        if (!member) return i.editReply('That user is not a member of this server.');
+        const me = await i.guild.members.fetchMe();
+        if (!me.permissions.has(PermissionFlagsBits.BanMembers))
+          return i.editReply('Give the bot Ban Members permission first.');
+        if (!member.bannable) return i.editReply('I cannot ban that member. Move my role above theirs and try again.');
+        const reason = i.options.getString('reason')?.trim() || 'No reason provided';
+        await member.ban({ reason: `${reason} (by ${i.user.id})` });
+        await i.editReply(`Banned ${safe(user.username)} (${user.id}). Reason: ${safe(reason)}.`);
+        return log(i.guild, data.config, `Member banned: ${user.id} by ${i.user.id}. Reason: ${safe(reason)}`);
+      }
       if (i.commandName === 'purge') return purge.preview(i);
       if (i.commandName === 'giveaway') return giveaways.command(i, data, staff(i, data.config), levels.canManage(i, data.config));
       if (i.commandName === 'vouches') {
