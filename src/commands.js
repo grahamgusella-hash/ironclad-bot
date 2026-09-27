@@ -38,8 +38,7 @@ const commands = [
       .addIntegerOption(v => v.setName('amount').setDescription('Levels to remove').setRequired(true).setMinValue(1).setMaxValue(1000000)))
     .addSubcommand(o => o.setName('balance').setDescription('See your available levels')),
   new SlashCommandBuilder().setName('leaderboard').setDescription('Show this server’s level leaderboard'),
-  new SlashCommandBuilder().setName('purge').setDescription('Server owner: delete all ticket channels after confirmation')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+  new SlashCommandBuilder().setName('purge').setDescription('Server owner or Co-Owner: delete all ticket channels after confirmation'),
   new SlashCommandBuilder().setName('withdraw').setDescription('Withdraw levels into a private staff ticket')
     .addIntegerOption(o => o.setName('amount').setDescription('Levels to withdraw').setRequired(true).setMinValue(1).setMaxValue(1000000)),
   new SlashCommandBuilder().setName('giveaway').setDescription('Run a prize giveaway')

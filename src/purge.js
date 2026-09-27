@@ -14,9 +14,16 @@ module.exports = (bot, store) => {
       (channel.parentId === data.config.categoryId && ticketName.test(channel.name));
   }
 
+  async function canPurge(i, data) {
+    if (i.user.id === i.guild.ownerId) return true;
+    if (!data.config.coOwnerRoleId) return false;
+    const member = await i.guild.members.fetch({ user: i.user.id, force: true }).catch(() => null);
+    return !!member?.roles.cache.has(data.config.coOwnerRoleId);
+  }
+
   async function preview(i, data) {
-    if (i.user.id !== i.guild.ownerId)
-      return i.reply({ content: 'Only the actual server owner can use /purge.', flags: MessageFlags.Ephemeral });
+    if (!await canPurge(i, data))
+      return i.reply({ content: 'Only the server owner or the configured Co-Owner role can use /purge. Ask an admin to select the Co-Owner role in /setup.', flags: MessageFlags.Ephemeral });
     if (active.has(i.guildId))
       return i.reply({ content: 'A ticket purge is already running in this server.', flags: MessageFlags.Ephemeral });
     await i.deferReply({ flags: MessageFlags.Ephemeral });
@@ -27,7 +34,7 @@ module.exports = (bot, store) => {
     const channels = await i.guild.channels.fetch();
     const ids = [...channels.values()].filter(channel => isTicket(channel, data)).map(channel => channel.id);
     const key = randomBytes(16).toString('hex');
-    pending.set(key, { guildId: i.guildId, ownerId: i.user.id, ids, expires: Date.now() + 120000 });
+    pending.set(key, { guildId: i.guildId, requesterId: i.user.id, ids, expires: Date.now() + 120000 });
     const timer = setTimeout(() => pending.delete(key), 120000);
     timer.unref?.();
     return i.editReply({ content: `**Ticket purge preview for ${i.guild.name}**\n${ids.length} ticket channel(s) will be permanently deleted, including open, closed, and withdrawal tickets. Their messages cannot be recovered. This will not change level balances, applications, vouches, or giveaways.\nConfirm within 2 minutes to delete these ${ids.length} ticket channels.`,
@@ -41,13 +48,17 @@ module.exports = (bot, store) => {
     if (!match) return false;
     const [, action, key] = match;
     const plan = pending.get(key);
-    if (!plan || plan.expires < Date.now() || plan.guildId !== i.guildId || plan.ownerId !== i.user.id || i.guild.ownerId !== i.user.id) {
+    if (!plan || plan.expires < Date.now() || plan.guildId !== i.guildId || plan.requesterId !== i.user.id) {
       await i.reply({ content: 'This confirmation has expired or belongs to someone else. Run /purge again.', flags: MessageFlags.Ephemeral });
       return true;
     }
     pending.delete(key);
     if (action === 'cancel') {
       await i.update({ content: 'Ticket purge canceled. No channels were deleted.', components: [] });
+      return true;
+    }
+    if (!await canPurge(i, data)) {
+      await i.update({ content: 'You no longer have permission to purge tickets. No channels were deleted.', components: [] });
       return true;
     }
     if (active.has(i.guildId) || !plan.ids.length) {
@@ -73,7 +84,7 @@ module.exports = (bot, store) => {
             if (!channel && Object.hasOwn(data.tickets, id)) { delete data.tickets[id]; store.save(); }
             continue;
           }
-          await channel.delete(`Ticket purge confirmed by server owner ${i.user.id}`);
+          await channel.delete(`Ticket purge confirmed by ${i.user.id}`);
           delete data.tickets[id];
           store.save();
           deleted++;
