@@ -254,9 +254,14 @@ bot.on('interactionCreate', async i => {
         if (!i.memberPermissions.has(PermissionFlagsBits.ManageGuild)) return i.reply(privateReply('Manage Server permission is required.'));
         if (!configValid(data.config)) return i.reply(privateReply('Run /setup first.'));
         const type = i.options.getString('type');
-        await i.channel.send({ content: type === 'ticket' ? '**Need help?** Open a private ticket below.' : '**Applications** Apply using the button below.',
+        const channel = i.options.getChannel('channel') || i.channel;
+        if (channel.type !== ChannelType.GuildText) return i.reply(privateReply('Choose a server text channel for the panel.'));
+        const me = await i.guild.members.fetchMe();
+        if (!channel.permissionsFor(me)?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]))
+          return i.reply(privateReply(`Give the bot View Channel and Send Messages permissions in ${channel} first.`));
+        await channel.send({ content: type === 'ticket' ? '**Need help?** Open a private ticket below.' : '**Applications** Apply using the button below.',
           components: [row(type === 'ticket' ? 'ticket:open' : 'application:open', type === 'ticket' ? 'Open ticket' : 'Apply', ButtonStyle.Primary)], allowedMentions: mentions });
-        return i.reply(privateReply('Panel posted.'));
+        return i.reply(privateReply(`Panel posted in ${channel}.`));
       }
       if (i.commandName === 'ticket') {
         const action = i.options.getSubcommand();

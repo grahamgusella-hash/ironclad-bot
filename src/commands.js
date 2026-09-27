@@ -12,8 +12,10 @@ const commands = [
     .addRoleOption(o => o.setName('co_owner_role').setDescription('Second role allowed to manage levels').setRequired(false)),
   new SlashCommandBuilder().setName('panel').setDescription('Post a ticket or application button panel')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .addStringOption(o => o.setName('type').setDescription('Panel to post in this channel').setRequired(true)
-      .addChoices({ name: 'Tickets', value: 'ticket' }, { name: 'Applications', value: 'application' })),
+    .addStringOption(o => o.setName('type').setDescription('Panel to post').setRequired(true)
+      .addChoices({ name: 'Tickets', value: 'ticket' }, { name: 'Applications', value: 'application' }))
+    .addChannelOption(o => o.setName('channel').setDescription('Text channel to post in (defaults to here)')
+      .addChannelTypes(ChannelType.GuildText)),
   new SlashCommandBuilder().setName('ticket').setDescription('Open or manage a private ticket')
     .addSubcommand(o => o.setName('open').setDescription('Open your ticket'))
     .addSubcommand(o => o.setName('close').setDescription('Close the ticket in this channel'))
