@@ -49,6 +49,12 @@ async function init() {
   console.log('Ironclad storage: Neon Postgres');
 }
 
+const ready = init().catch(error => {
+  console.error('Failed to initialize Ironclad storage:', error);
+  setTimeout(() => process.exit(1), 100);
+  throw error;
+});
+
 function guild(id) {
   const record = state.guilds[id] ||= { config: {}, tickets: {}, applications: {}, vouches: {}, giveaways: {}, polls: {}, levels: {} };
   record.giveaways ||= {};
@@ -81,4 +87,4 @@ function save() {
   fs.renameSync(tmp, file);
 }
 
-module.exports = { init, guild, save, state };
+module.exports = { ready, guild, save, state };
