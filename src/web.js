@@ -1,4 +1,6 @@
 const { randomBytes, timingSafeEqual } = require('node:crypto');
+const { readFileSync } = require('node:fs');
+const { join } = require('node:path');
 const { PermissionFlagsBits, ChannelType } = require('discord.js');
 const polls = require('./polls');
 
@@ -13,6 +15,14 @@ const secure = origin.startsWith('https:') ? '; Secure' : '';
 const token = () => randomBytes(32).toString('hex');
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const params = url => new URL(url, origin);
+const publicFiles = new Map([
+  ['/manifest.webmanifest', ['manifest.webmanifest', 'application/manifest+json']],
+  ['/app.js', ['app.js', 'text/javascript; charset=utf-8']],
+  ['/sw.js', ['sw.js', 'text/javascript; charset=utf-8']],
+  ['/offline.html', ['offline.html', 'text/html; charset=utf-8']],
+  ['/icons/icon-192.png', ['icon-192.png', 'image/png']],
+  ['/icons/icon-512.png', ['icon-512.png', 'image/png']]
+]);
 
 function cookies(req) {
   return Object.fromEntries((req.headers.cookie || '').split(';').map(part => part.trim().split('=')).filter(pair => pair.length === 2));
@@ -26,13 +36,13 @@ function html(res, body, status = 200) {
     'Cache-Control': 'no-store',
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer',
-    'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+    'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; manifest-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
   });
   res.end(body);
 }
 function redirect(res, location) { res.writeHead(303, { Location: location, 'Cache-Control': 'no-store' }); res.end(); }
 function page(title, body, session) {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} · Ironclad</title><style>
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#161b29"><link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/icons/icon-192.png" sizes="192x192" type="image/png"><link rel="apple-touch-icon" href="/icons/icon-192.png"><script src="/app.js" defer></script><title>${esc(title)} · Ironclad</title><style>
   :root{color-scheme:dark;font:16px system-ui,sans-serif;background:#0d1018;color:#eef1fa}*{box-sizing:border-box}body{margin:0}a{color:#9badff;text-decoration:none}a:hover{text-decoration:underline}header{padding:18px max(24px,calc((100vw - 1100px)/2));background:#161b29;border-bottom:1px solid #31394e;display:flex;justify-content:space-between;align-items:center;gap:16px}.brand{font-size:22px;font-weight:800;color:white;letter-spacing:.02em}main{max-width:1100px;margin:34px auto;padding:0 24px 72px}h1{font-size:34px;letter-spacing:-.03em;margin:0 0 10px}h2{font-size:20px;margin:0 0 16px}p{line-height:1.55}.muted{color:#a5aec6}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(285px,1fr));gap:18px;margin:24px 0}.card,.message{border:1px solid #303950;background:#181f2f;border-radius:14px;padding:20px}.card p{margin:9px 0}.pill{font-size:12px;padding:4px 9px;border-radius:99px;background:#303d64;color:#dce2ff}button,.button{border:0;display:inline-block;border-radius:9px;padding:11px 16px;background:#627df3;color:white;font:inherit;font-weight:650;cursor:pointer}button:hover,.button:hover{background:#7990ff;text-decoration:none}button:disabled{opacity:.5;cursor:not-allowed}label{display:block;margin:16px 0 6px;color:#cbd3e6;font-weight:600}input,select,textarea{width:100%;font:inherit;color:#fff;background:#101725;border:1px solid #435070;border-radius:9px;padding:11px}textarea{min-height:115px;resize:vertical}.row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.row form{margin:0}.message{margin:12px 0;white-space:pre-wrap;overflow-wrap:anywhere}.message small{color:#b4bdd6}.message p{margin:9px 0 0}.alert{background:#3b2832;border:1px solid #a25870;border-radius:10px;padding:14px}.success{background:#1c382f;border-color:#428b6c}nav{display:flex;gap:16px;flex-wrap:wrap;margin:22px 0}.divider{border:0;border-top:1px solid #303950;margin:25px 0}
   </style></head><body><header><a class="brand" href="/">◆ IRONCLAD</a>${session ? `<div class="row"><span class="muted">${esc(session.username)}</span><form method="post" action="/logout"><input type="hidden" name="csrf" value="${session.csrf}"><button>Sign out</button></form></div>` : ''}</header><main>${body}</main></body></html>`;
 }
@@ -75,6 +85,19 @@ module.exports = (bot, store, giveaways) => async (req, res) => {
   try {
     const url = params(req.url);
     const path = url.pathname;
+    if (publicFiles.has(path)) {
+      if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { Allow: 'GET, HEAD' }); return res.end(); }
+      const [filename, contentType] = publicFiles.get(path);
+      const contents = readFileSync(join(__dirname, 'public', filename));
+      res.writeHead(200, {
+        'Content-Type': contentType,
+        'Content-Length': contents.length,
+        'Cache-Control': path === '/sw.js' ? 'no-cache' : 'public, max-age=3600',
+        'X-Content-Type-Options': 'nosniff',
+        ...(path === '/sw.js' ? { 'Service-Worker-Allowed': '/' } : {})
+      });
+      return res.end(req.method === 'HEAD' ? undefined : contents);
+    }
     session = sessionFor(req);
     if (path === '/health' || path === '/') {
       if (path === '/health') { const ready = bot.isReady(); res.writeHead(ready ? 200 : 503, { 'Content-Type': 'text/plain' }); return res.end(ready ? 'Ironclad Bot is online' : 'Connecting to Discord'); }

@@ -28,6 +28,10 @@ The website runs in the **same Node process and Render Web Service** as the bot.
 
 The dashboard sessions are held in memory, so a redeploy signs users out. The bot's JSON store still needs a persistent disk: the current free Web Service does not provide one, and stored levels, tickets, vouches, and giveaway records can disappear on restart. A paid Web Service with a disk is needed to reliably preserve those records and run scheduled giveaways continuously.
 
+### Install the dashboard on a phone
+
+On Android, open the dashboard URL in Chrome, tap the three-dot menu, and choose **Install app** (or **Add to Home screen**). Sign in with Discord as usual. The installed dashboard opens from your home screen in its own window. It needs an internet connection to view tickets and manage the bot; only a generic offline message is stored on the phone. On iPhone, open the dashboard in Safari and use **Share → Add to Home Screen**. This is an installable web app, not an APK or an app-store download.
+
 ## Install
 
 1. Create an application at [Discord Developer Portal](https://discord.com/developers/applications), name it **Ironclad Bot**, and add a Bot user. Copy its **bot token** and **application ID**. Never share the token.
