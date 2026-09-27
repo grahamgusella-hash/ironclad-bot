@@ -340,6 +340,7 @@ bot.on('interactionCreate', async i => {
 
 bot.once('clientReady', () => {
   console.log(`Ironclad Bot is online as ${bot.user.tag}`);
+  console.log(`Connected servers (${bot.guilds.cache.size}): ${[...bot.guilds.cache.keys()].join(', ') || 'none'}`);
   giveaways.sweep().catch(console.error);
   setInterval(() => giveaways.sweep().catch(console.error), 15000);
 });
