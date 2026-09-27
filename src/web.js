@@ -36,7 +36,7 @@ function html(res, body, status = 200) {
     'Cache-Control': 'no-store',
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer',
-    'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; manifest-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+    'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
   });
   res.end(body);
 }
