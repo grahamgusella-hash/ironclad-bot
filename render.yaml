@@ -3,7 +3,7 @@ services:
     name: ironclad-discord-bot
     runtime: node
     plan: starter
-    buildCommand: npm ci
+    buildCommand: npm install
     startCommand: npm start
     envVars:
       - key: DISCORD_TOKEN
@@ -14,9 +14,5 @@ services:
         sync: false
       - key: PUBLIC_URL
         sync: false
-      - key: DATA_FILE
-        value: /var/data/state.json
-    disk:
-      name: ironclad-data
-      mountPath: /var/data
-      sizeGB: 1
+      - key: DATABASE_URL
+        sync: false
