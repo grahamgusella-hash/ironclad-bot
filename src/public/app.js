@@ -53,7 +53,7 @@
 
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   function shootingStar() {
-    if (reducedMotion || document.hidden) return;
+    if (reducedMotion || document.hidden || document.body.dataset.theme !== 'galaxy') return;
     const star = document.createElement('span');
     star.className = 'ironclad-shooting-star';
     star.style.left = `${65 + Math.random() * 35}vw`;
@@ -123,6 +123,80 @@
   document.addEventListener('pointerdown', event => {
     const target = event.target.closest('button,.button,a[href],select');
     if (target && target.id !== 'ironclad-sound-toggle' && !target.disabled) tone('click');
+  });
+})();
+
+// Theme picker. Choice is stored per browser/device.
+(() => {
+  const themes = {
+    galaxy: 'Galaxy',
+    cyber: 'Cyber Neon',
+    minecraft: 'Minecraft Night',
+    ocean: 'Deep Ocean',
+    ember: 'Ember'
+  };
+
+  const style = document.createElement('style');
+  style.textContent = `
+    #ironclad-theme-panel{position:fixed;left:18px;bottom:18px;z-index:50;display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:14px;border:1px solid rgba(150,166,255,.28);background:rgba(12,16,34,.88);backdrop-filter:blur(12px);box-shadow:0 8px 28px rgba(0,0,0,.32)}
+    #ironclad-theme-panel label{margin:0;font-size:12px;color:#dce4ff;font-weight:700}
+    #ironclad-theme-select{width:auto;min-width:145px;padding:7px 9px;border-radius:9px;background:rgba(8,12,28,.96);border:1px solid rgba(126,148,235,.42);color:white}
+    body[data-theme="cyber"]{background:radial-gradient(circle at 20% 20%,rgba(0,255,240,.18),transparent 28%),radial-gradient(circle at 80% 25%,rgba(255,0,200,.18),transparent 30%),linear-gradient(135deg,#020208,#070318 48%,#02020a)!important}
+    body[data-theme="cyber"]::before{background-image:linear-gradient(rgba(0,255,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(255,0,220,.07) 1px,transparent 1px)!important;background-size:44px 44px!important;opacity:.65!important;animation:ironclad-cyber-grid 12s linear infinite!important}
+    body[data-theme="cyber"]::after{background:radial-gradient(circle at 50% 40%,rgba(0,255,230,.10),transparent 34%),radial-gradient(circle at 65% 75%,rgba(255,0,220,.10),transparent 28%)!important}
+    body[data-theme="cyber"] .card,body[data-theme="cyber"] .message{border-color:rgba(0,255,235,.28)!important;box-shadow:0 0 24px rgba(0,255,235,.08),inset 0 1px 0 rgba(255,255,255,.03)}
+    body[data-theme="cyber"] button,body[data-theme="cyber"] .button{background:#0b8fa0}
+    @keyframes ironclad-cyber-grid{to{background-position:44px 44px,44px 44px}}
+
+    body[data-theme="minecraft"]{background:linear-gradient(#071327 0%,#0b1d39 55%,#152714 56%,#0d170d 100%)!important}
+    body[data-theme="minecraft"]::before{background-image:radial-gradient(circle,#fff 0 1px,transparent 1.5px),radial-gradient(circle,#9fc8ff 0 1px,transparent 1.5px)!important;background-size:90px 90px,145px 145px!important;opacity:.7!important;animation:ironclad-stars 120s linear infinite!important}
+    body[data-theme="minecraft"]::after{background:linear-gradient(90deg,transparent 0 12%,rgba(80,120,70,.10) 12% 18%,transparent 18% 100%)!important;filter:none!important;animation:none!important}
+    body[data-theme="minecraft"] .card,body[data-theme="minecraft"] .message{background:rgba(17,31,24,.88)!important;border-color:rgba(105,150,90,.34)!important}
+    body[data-theme="minecraft"] button,body[data-theme="minecraft"] .button{background:#3e7a3a}
+
+    body[data-theme="ocean"]{background:radial-gradient(circle at 25% 18%,rgba(0,170,255,.16),transparent 30%),radial-gradient(circle at 75% 75%,rgba(0,90,160,.18),transparent 34%),linear-gradient(180deg,#02111c 0%,#031c2d 45%,#01101a 100%)!important}
+    body[data-theme="ocean"]::before{background-image:radial-gradient(circle,rgba(180,235,255,.9) 0 1px,transparent 1.5px),radial-gradient(circle,rgba(120,210,255,.65) 0 1px,transparent 1.5px)!important;background-size:120px 120px,180px 180px!important;opacity:.35!important;animation:ironclad-ocean-drift 28s linear infinite!important}
+    body[data-theme="ocean"]::after{background:radial-gradient(ellipse at 50% 110%,rgba(0,180,220,.16),transparent 40%)!important}
+    body[data-theme="ocean"] .card,body[data-theme="ocean"] .message{background:rgba(5,28,42,.88)!important;border-color:rgba(70,170,210,.28)!important}
+    body[data-theme="ocean"] button,body[data-theme="ocean"] .button{background:#147da3}
+    @keyframes ironclad-ocean-drift{to{background-position:0 -120px,0 -180px}}
+
+    body[data-theme="ember"]{background:radial-gradient(circle at 20% 25%,rgba(255,90,20,.20),transparent 30%),radial-gradient(circle at 80% 70%,rgba(180,30,0,.18),transparent 34%),linear-gradient(145deg,#150603 0%,#260b05 45%,#090201 100%)!important}
+    body[data-theme="ember"]::before{background-image:radial-gradient(circle,rgba(255,190,100,.95) 0 1px,transparent 1.5px),radial-gradient(circle,rgba(255,80,30,.7) 0 1px,transparent 1.5px)!important;background-size:75px 75px,130px 130px!important;opacity:.45!important;animation:ironclad-embers 18s linear infinite!important}
+    body[data-theme="ember"]::after{background:radial-gradient(ellipse at 50% 100%,rgba(255,70,0,.18),transparent 35%)!important}
+    body[data-theme="ember"] .card,body[data-theme="ember"] .message{background:rgba(38,14,10,.88)!important;border-color:rgba(220,92,55,.30)!important}
+    body[data-theme="ember"] button,body[data-theme="ember"] .button{background:#a74428}
+    @keyframes ironclad-embers{to{background-position:30px -120px,-25px -180px}}
+
+    body[data-theme]:not([data-theme="galaxy"]) .ironclad-shooting-star{display:none!important}
+    @media(max-width:680px){#ironclad-theme-panel{left:10px;bottom:64px}#ironclad-sound-toggle{right:10px;bottom:14px}}
+  `;
+  document.head.appendChild(style);
+
+  const panel = document.createElement('div');
+  panel.id = 'ironclad-theme-panel';
+  const label = document.createElement('label');
+  label.htmlFor = 'ironclad-theme-select';
+  label.textContent = 'Theme';
+  const select = document.createElement('select');
+  select.id = 'ironclad-theme-select';
+  for (const [value, name] of Object.entries(themes)) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = name;
+    select.appendChild(option);
+  }
+  panel.append(label, select);
+  document.body.appendChild(panel);
+
+  const saved = localStorage.getItem('ironclad-theme');
+  const initial = themes[saved] ? saved : 'galaxy';
+  document.body.dataset.theme = initial;
+  select.value = initial;
+
+  select.addEventListener('change', () => {
+    document.body.dataset.theme = select.value;
+    localStorage.setItem('ironclad-theme', select.value);
   });
 })();
 
