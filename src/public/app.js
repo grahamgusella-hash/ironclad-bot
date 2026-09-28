@@ -53,10 +53,10 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// Keep the server overview and ticket list fresh without making staff reload manually.
-// We only replace the main content when nobody is typing or using a form.
+// Keep server overview, ticket list, and individual ticket conversations fresh.
+// Avoid replacing the page while staff are actively typing or using a control.
 (() => {
-  const livePage = location.pathname === '/' || /^\/g\/\d+(?:\/tickets)?$/.test(location.pathname);
+  const livePage = location.pathname === '/' || /^\/g\/\d+(?:\/tickets(?:\/\d+)?)?$/.test(location.pathname);
   if (!livePage) return;
 
   let checking = false;
@@ -78,15 +78,13 @@ if ('serviceWorker' in navigator) {
       const html = await response.text();
       const next = new DOMParser().parseFromString(html, 'text/html').querySelector('main');
       const current = document.querySelector('main');
-      if (next && current && next.innerHTML !== current.innerHTML) {
-        current.innerHTML = next.innerHTML;
-      }
+      if (next && current && next.innerHTML !== current.innerHTML) current.innerHTML = next.innerHTML;
     } catch (_) {
-      // A temporary network issue should not interrupt the dashboard.
+      // Temporary network issues should not interrupt the dashboard.
     } finally {
       checking = false;
     }
   }
 
-  setInterval(refreshIfChanged, 2000);
+  setInterval(refreshIfChanged, 1500);
 })();
