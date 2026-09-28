@@ -11,7 +11,7 @@ const polls = require('./polls');
 const applications = require('./applications');
 
 if (!process.env.DISCORD_TOKEN) throw new Error('Missing DISCORD_TOKEN in .env');
-const bot = new Client({ intents: [GatewayIntentBits.Guilds] });
+const bot = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.MessageContent] });
 const giveaways = require('./giveaways')(bot, store);
 const push = require('./push')(bot, store);
 const purge = require('./purge')(bot, store);
@@ -85,7 +85,6 @@ async function withdraw(i, data) {
     delete data.tickets[prior[0]];
     store.save();
   }
-  // Reserve the levels before awaiting Discord, so simultaneous requests cannot spend twice.
   if (!levels.change(data, i.user.id, -amount)) return i.editReply(`You have ${levels.balance(data, i.user.id)} levels available.`);
   store.save();
   let channel;
