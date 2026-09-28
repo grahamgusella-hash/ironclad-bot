@@ -54,9 +54,9 @@ if ('serviceWorker' in navigator) {
 }
 
 // Keep server overview, ticket list, and individual ticket conversations fresh.
-// Avoid replacing the page while staff are actively typing or using a control.
 (() => {
-  const livePage = location.pathname === '/' || /^\/g\/\d+(?:\/tickets(?:\/\d+)?)?$/.test(location.pathname);
+  const ticketDetail = /^\/g\/\d+\/tickets\/\d+$/.test(location.pathname);
+  const livePage = ticketDetail || location.pathname === '/' || /^\/g\/\d+(?:\/tickets)?$/.test(location.pathname);
   if (!livePage) return;
 
   let checking = false;
@@ -65,20 +65,39 @@ if ('serviceWorker' in navigator) {
     return el && ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(el.tagName);
   };
 
+  function replaceTicketMessages(nextMain, currentMain) {
+    const currentMessages = [...currentMain.querySelectorAll('.message')];
+    const nextMessages = [...nextMain.querySelectorAll('.message')];
+    const currentSignature = currentMessages.map(node => node.innerHTML).join('\n');
+    const nextSignature = nextMessages.map(node => node.innerHTML).join('\n');
+    if (currentSignature === nextSignature) return;
+
+    const firstMessage = currentMessages[0];
+    const anchor = firstMessage || currentMain.querySelector('hr.divider');
+    if (!anchor) return;
+
+    currentMessages.forEach(node => node.remove());
+    nextMessages.forEach(node => anchor.parentNode.insertBefore(node.cloneNode(true), anchor));
+  }
+
   async function refreshIfChanged() {
-    if (checking || document.visibilityState !== 'visible' || editing()) return;
+    if (checking || document.visibilityState !== 'visible') return;
+    if (!ticketDetail && editing()) return;
     checking = true;
     try {
-      const response = await fetch(location.href, {
+      const response = await fetch(`${location.pathname}${location.search}${location.search ? '&' : '?'}_=${Date.now()}`, {
         credentials: 'same-origin',
         cache: 'no-store',
         headers: { 'X-Ironclad-Refresh': '1' }
       });
       if (!response.ok) return;
       const html = await response.text();
-      const next = new DOMParser().parseFromString(html, 'text/html').querySelector('main');
-      const current = document.querySelector('main');
-      if (next && current && next.innerHTML !== current.innerHTML) current.innerHTML = next.innerHTML;
+      const nextMain = new DOMParser().parseFromString(html, 'text/html').querySelector('main');
+      const currentMain = document.querySelector('main');
+      if (!nextMain || !currentMain) return;
+
+      if (ticketDetail) replaceTicketMessages(nextMain, currentMain);
+      else if (nextMain.innerHTML !== currentMain.innerHTML) currentMain.innerHTML = nextMain.innerHTML;
     } catch (_) {
       // Temporary network issues should not interrupt the dashboard.
     } finally {
@@ -86,5 +105,6 @@ if ('serviceWorker' in navigator) {
     }
   }
 
-  setInterval(refreshIfChanged, 1500);
+  refreshIfChanged();
+  setInterval(refreshIfChanged, 1000);
 })();
