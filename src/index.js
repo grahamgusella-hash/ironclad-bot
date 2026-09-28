@@ -11,7 +11,7 @@ const polls = require('./polls');
 const applications = require('./applications');
 
 if (!process.env.DISCORD_TOKEN) throw new Error('Missing DISCORD_TOKEN in .env');
-const bot = new Client({ intents: [GatewayIntentBits.Guilds] });
+const bot = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.MessageContent] });
 const giveaways = require('./giveaways')(bot, store);
 const push = require('./push')(bot, store);
 const purge = require('./purge')(bot, store);
@@ -228,159 +228,59 @@ async function reviewApplication(i, data, decision, userId) {
 
 async function addVouch(i, data) {
   const cfg = data.config;
-  if (!configValid(cfg)) return i.reply(privateReply('An admin must run /setup first.'));
-  const user = i.options.getUser('user');
-  if (user.id === i.user.id || user.bot) return i.reply(privateReply('Vouch for another human member.'));
-  const member = await i.guild.members.fetch(user.id).catch(() => null);
-  if (!member) return i.reply(privateReply('That user must be in this server.'));
-  const list = data.vouches[user.id] ||= [];
-  if (list.some(v => v.authorId === i.user.id)) return i.reply(privateReply('You have already vouched for this member.'));
-  await i.deferReply({ flags: MessageFlags.Ephemeral });
-  const ch = await i.guild.channels.fetch(cfg.vouchesChannelId);
-  if (!ch?.isTextBased()) return i.editReply('The vouches channel is unavailable. Ask an admin to run /setup again.');
+  const target = i.options.getUser('user');
   const reason = i.options.getString('reason');
-  const msg = await ch.send({ embeds: [new EmbedBuilder().setTitle('New vouch').setColor(0x2ecc71)
-    .addFields({ name: 'For', value: `${safe(user.username)} (${user.id})` },
-      { name: 'From', value: `${safe(i.user.username)} (${i.user.id})` },
-      { name: 'Reason', value: safe(reason) }).setTimestamp()], allowedMentions: mentions });
-  list.push({ authorId: i.user.id, reason, at: new Date().toISOString(), messageId: msg.id });
+  if (!target || target.bot || target.id === i.user.id) return i.reply(privateReply('Choose another non-bot member.'));
+  const list = data.vouches[target.id] ||= [];
+  list.push({ authorId: i.user.id, reason, at: new Date().toISOString() });
   store.save();
-  await i.editReply(`Vouch posted for ${safe(user.username)}. They now have ${list.length} vouch(es).`);
-  void push.notify(i.guild, 'vouch', 'New vouch', `${i.user.username} vouched for ${user.username}`, `/g/${i.guildId}/vouches`, ch).catch(console.error);
+  await i.reply({ content: `Vouched for ${safe(target.username)}.`, flags: MessageFlags.Ephemeral });
+  const ch = await i.guild.channels.fetch(cfg.vouchesChannelId).catch(() => null);
+  if (ch?.isTextBased()) await ch.send({ content: `**${safe(i.user.username)}** vouched for **${safe(target.username)}**\n${safe(reason)}`, allowedMentions: mentions }).catch(console.error);
+  void push.notify(i.guild, 'vouch', 'New vouch', `${i.user.username} vouched for ${target.username}`, `/g/${i.guildId}/vouches`, ch).catch(console.error);
 }
+
+bot.once('ready', () => console.log(`Ironclad Bot is online as ${bot.user?.tag}`));
 
 bot.on('interactionCreate', async i => {
   if (!i.inGuild()) return;
+  const data = store.guild(i.guildId);
   try {
-    const data = store.guild(i.guildId);
     if (i.isChatInputCommand()) {
-      if (i.commandName === 'setup') {
-        if (!i.memberPermissions.has(PermissionFlagsBits.ManageGuild)) return i.reply(privateReply('Manage Server permission is required.'));
-        const staffRole = i.options.getRole('staff_role');
-        if (staffRole.id === i.guild.id || staffRole.managed) return i.reply(privateReply('Choose a regular staff role, not @everyone or an integration role.'));
-        const ownerRole = i.options.getRole('owner_role');
-        const coOwnerRole = i.options.getRole('co_owner_role');
-        if ([ownerRole, coOwnerRole].some(role => role && (role.id === i.guild.id || role.managed)))
-          return i.reply(privateReply('Owner and Co Owner must be regular roles, not @everyone or integration roles.'));
-        const applications = i.options.getChannel('applications_channel');
-        const vouches = i.options.getChannel('vouches_channel');
-        if (applications.id === vouches.id) return i.reply(privateReply('Choose separate applications and vouches channels.'));
-        const botMember = await i.guild.members.fetchMe();
-        for (const [ch, perms] of [[applications, [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks]], [vouches, [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks]]]) {
-          if (!ch.permissionsFor(botMember)?.has(perms)) return i.reply(privateReply(`I need View Channel, Send Messages, and Embed Links in ${ch}.`));
-        }
-        data.config = {
-          staffRoleId: staffRole.id, categoryId: i.options.getChannel('ticket_category').id,
-          applicationsChannelId: applications.id, vouchesChannelId: vouches.id,
-          logsChannelId: i.options.getChannel('logs_channel')?.id || null,
-          ownerRoleId: ownerRole?.id || data.config.ownerRoleId || null,
-          coOwnerRoleId: coOwnerRole?.id || data.config.coOwnerRoleId || null
-        };
-        store.save();
-        return i.reply(privateReply('Configured. Keep the applications channel private to staff. Select Owner and Co Owner roles in /setup to enable level controls, then post ticket and application panels.'));
-      }
-      if (i.commandName === 'panel') {
-        if (!i.memberPermissions.has(PermissionFlagsBits.ManageGuild)) return i.reply(privateReply('Manage Server permission is required.'));
-        if (!configValid(data.config)) return i.reply(privateReply('Run /setup first.'));
-        const type = i.options.getString('type');
-        const channel = i.options.getChannel('channel') || i.channel;
-        if (channel.type !== ChannelType.GuildText) return i.reply(privateReply('Choose a server text channel for the panel.'));
-        const me = await i.guild.members.fetchMe();
-        if (!channel.permissionsFor(me)?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]))
-          return i.reply(privateReply(`Give the bot View Channel and Send Messages permissions in ${channel} first.`));
-        await channel.send({ content: type === 'ticket' ? '**Need help?** Open a private ticket below.' : '**Applications** Apply using the button below.',
-          components: [row(type === 'ticket' ? 'ticket:open' : 'application:open', type === 'ticket' ? 'Open ticket' : 'Apply', ButtonStyle.Primary)], allowedMentions: mentions });
-        return i.reply(privateReply(`Panel posted in ${channel}.`));
-      }
-      if (i.commandName === 'ticket') {
-        const action = i.options.getSubcommand();
-        return action === 'open' ? openTicket(i, data) : ticketAction(i, data, action);
-      }
-      if (i.commandName === 'apply') {
-        if (!configValid(data.config)) return i.reply(privateReply('An admin must run /setup first.'));
-        if (data.applications[i.user.id]?.status === 'pending') return i.reply(privateReply('You already have an application awaiting review.'));
-        return i.showModal(applicationModal());
-      }
+      if (i.commandName === 'setup') return require('./setup')(i, data, store);
+      if (i.commandName === 'ticket') return ticketAction(i, data, i.options.getSubcommand());
+      if (i.commandName === 'apply') return i.showModal(applicationModal());
       if (i.commandName === 'vouch') return addVouch(i, data);
-      if (i.commandName === 'level') {
-        const action = i.options.getSubcommand();
-        if (action === 'balance') return i.reply(privateReply(`You have **${levels.balance(data, i.user.id).toLocaleString()} levels** available.`));
-        if (!levels.canManage(i, data.config)) return i.reply(privateReply('Only members with the configured Owner or Co Owner role can change levels. Ask an admin to select those roles in /setup.'));
-        const user = i.options.getUser('user');
-        if (user.bot || !await i.guild.members.fetch(user.id).catch(() => null)) return i.reply(privateReply('Choose a human member of this server.'));
-        const amount = i.options.getInteger('amount');
-        const changed = levels.change(data, user.id, action === 'add' ? amount : -amount);
-        if (!changed) return i.reply(privateReply(action === 'remove' ? `This member has only ${levels.balance(data, user.id)} levels.` : 'That balance is too large.'));
-        store.save();
-        await i.reply(privateReply(`${action === 'add' ? 'Added' : 'Removed'} ${amount.toLocaleString()} levels ${action === 'add' ? 'to' : 'from'} ${safe(user.username)}. New balance: ${levels.balance(data, user.id).toLocaleString()}.`));
-        return log(i.guild, data.config, `Levels ${action === 'add' ? 'added to' : 'removed from'} ${user.id}: ${amount}, by ${i.user.id}.`);
-      }
-      if (i.commandName === 'leaderboard') {
-        const ranked = Object.entries(data.levels).filter(([, value]) => Number.isSafeInteger(value) && value > 0)
-          .sort((a, b) => b[1] - a[1]).slice(0, 10);
-        return i.reply({ content: ranked.length ? `**${safe(i.guild.name)} level leaderboard**\n${ranked.map(([id, amount], n) => `${n + 1}. <@${id}> — ${amount.toLocaleString()} levels`).join('\n')}` : 'No one has levels yet.', allowedMentions: mentions });
-      }
       if (i.commandName === 'withdraw') return withdraw(i, data);
-      if (i.commandName === 'purge') return purge.preview(i, data);
-      if (i.commandName === 'wipe') return wipe.preview(i, data);
-      if (i.commandName === 'poll') {
-        if (!staff(i, data.config) && !levels.canManage(i, data.config) && i.user.id !== i.guild.ownerId)
-          return i.reply(privateReply('Only staff, Owner, or Co-Owner can create polls.'));
-        const channel = i.options.getChannel('channel') || i.channel;
-        const answers = Array.from({ length: 5 }, (_, n) => i.options.getString(`answer_${n + 1}`));
-        await i.deferReply({ flags: MessageFlags.Ephemeral });
-        const message = await polls.create(i.guild, channel, i.options.getString('question'), answers, i.options.getInteger('hours') || 24);
-        polls.record(data, store, message, i.user.id);
-        return i.editReply(`Poll posted in ${channel}: ${message.url}`);
-      }
-      if (i.commandName === 'giveaway') return giveaways.command(i, data, staff(i, data.config), levels.canManage(i, data.config));
-      if (i.commandName === 'vouches') {
-        const user = i.options.getUser('user');
-        const list = data.vouches[user.id] || [];
-        const recent = list.slice(-5).reverse().map(v => `• ${safe(v.reason).slice(0, 180)} — <@${v.authorId}>`).join('\n');
-        return i.reply({ content: `**${safe(user.username)}: ${list.length} vouch(es)**${recent ? `\n${recent}` : ''}`,
-          allowedMentions: mentions, flags: MessageFlags.Ephemeral });
-      }
+      if (i.commandName === 'balance') return i.reply(privateReply(`You have ${levels.balance(data, i.user.id).toLocaleString()} levels.`));
+      if (i.commandName === 'poll') return polls.handleCommand(i, data, store);
+      if (i.commandName === 'giveaway') return giveaways.handleCommand(i, data);
+      if (i.commandName === 'purge') return purge.handleCommand(i, data);
+      if (i.commandName === 'wipe') return wipe.handleCommand(i, data);
     }
     if (i.isButton()) {
-      if (i.customId.startsWith('purge:')) return purge.button(i, data);
-      if (i.customId.startsWith('wipe:')) return wipe.button(i, data);
-      if (i.customId.startsWith('giveaway:enter:')) return giveaways.enter(i, data);
       if (i.customId === 'ticket:open') return openTicket(i, data);
       if (i.customId === 'ticket:close') return ticketAction(i, data, 'close');
-      if (i.customId === 'application:open') {
-        if (!configValid(data.config)) return i.reply(privateReply('An admin must run /setup first.'));
-        if (data.applications[i.user.id]?.status === 'pending') return i.reply(privateReply('You already have an application awaiting review.'));
-        return i.showModal(applicationModal());
-      }
-      const review = /^application:(approve|reject):(\d+)$/.exec(i.customId);
-      if (review) return reviewApplication(i, data, review[1], review[2]);
+      if (i.customId.startsWith('application:approve:')) return reviewApplication(i, data, 'approve', i.customId.split(':')[2]);
+      if (i.customId.startsWith('application:reject:')) return reviewApplication(i, data, 'reject', i.customId.split(':')[2]);
+      if (i.customId.startsWith('giveaway:')) return giveaways.handleButton(i, data);
+      if (i.customId.startsWith('purge:')) return purge.handleButton(i, data);
+      if (i.customId.startsWith('wipe:')) return wipe.handleButton(i, data);
     }
-    if (i.isRoleSelectMenu()) {
-      const assign = /^application:assign:(\d{17,22})$/.exec(i.customId);
-      if (assign) {
-        if (!staff(i, data.config)) return i.reply(privateReply('Only staff can review applications.'));
-        const reviewer = await i.guild.members.fetch({ user: i.user.id, force: true });
-        await i.deferUpdate();
-        const role = await applications.decide({ guild: i.guild, data, store, bot, userId: assign[1],
-          decision: 'approved', reviewer, roleId: i.values[0] });
-        return i.followUp(privateReply(`Application approved. ${role.name} was assigned.`));
-      }
+    if (i.isRoleSelectMenu() && i.customId.startsWith('application:assign:')) {
+      const userId = i.customId.split(':')[2];
+      const reviewer = await i.guild.members.fetch({ user: i.user.id, force: true });
+      await i.deferReply({ flags: MessageFlags.Ephemeral });
+      await applications.decide({ guild: i.guild, data, store, bot, userId, decision: 'approved', reviewer, roleId: i.values[0] });
+      return i.editReply('Application approved and role assigned.');
     }
     if (i.isModalSubmit() && i.customId === 'application:submit') return submitApplication(i, data);
-  } catch (err) {
-    console.error('Interaction failed:', err);
-    const message = privateReply('Something went wrong. Check my channel permissions or ask the bot owner to check the logs.');
-    if (i.deferred) await i.editReply(message).catch(console.error);
-    else if (i.replied) await i.followUp(message).catch(console.error);
-    else await i.reply(message).catch(console.error);
+  } catch (error) {
+    console.error(error);
+    const content = 'Something went wrong. Check the bot permissions and try again.';
+    if (i.deferred || i.replied) return i.editReply(content).catch(() => {});
+    return i.reply(privateReply(content)).catch(() => {});
   }
 });
 
-bot.once('clientReady', () => {
-  console.log(`Ironclad Bot is online as ${bot.user.tag}`);
-  console.log(`Connected servers (${bot.guilds.cache.size}): ${[...bot.guilds.cache.keys()].join(', ') || 'none'}`);
-  giveaways.sweep().catch(console.error);
-  setInterval(() => giveaways.sweep().catch(console.error), 15000);
-});
 bot.login(process.env.DISCORD_TOKEN);
