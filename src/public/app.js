@@ -52,3 +52,41 @@ if ('serviceWorker' in navigator) {
     }
   });
 }
+
+// Keep the server overview and ticket list fresh without making staff reload manually.
+// We only replace the main content when nobody is typing or using a form.
+(() => {
+  const livePage = location.pathname === '/' || /^\/g\/\d+(?:\/tickets)?$/.test(location.pathname);
+  if (!livePage) return;
+
+  let checking = false;
+  const editing = () => {
+    const el = document.activeElement;
+    return el && ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(el.tagName);
+  };
+
+  async function refreshIfChanged() {
+    if (checking || document.visibilityState !== 'visible' || editing()) return;
+    checking = true;
+    try {
+      const response = await fetch(location.href, {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { 'X-Ironclad-Refresh': '1' }
+      });
+      if (!response.ok) return;
+      const html = await response.text();
+      const next = new DOMParser().parseFromString(html, 'text/html').querySelector('main');
+      const current = document.querySelector('main');
+      if (next && current && next.innerHTML !== current.innerHTML) {
+        current.innerHTML = next.innerHTML;
+      }
+    } catch (_) {
+      // A temporary network issue should not interrupt the dashboard.
+    } finally {
+      checking = false;
+    }
+  }
+
+  setInterval(refreshIfChanged, 2000);
+})();
