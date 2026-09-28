@@ -156,24 +156,38 @@ async function ticketAction(i, data, action) {
   return i.reply(privateReply(`Removed ${safe(user.username)}.`));
 }
 
-function applicationModal() {
+function applicationModal(roleId) {
   const field = (id, label, style) => new ActionRowBuilder().addComponents(
     new TextInputBuilder().setCustomId(id).setLabel(label).setStyle(style).setRequired(true).setMaxLength(id === 'why' ? 1000 : 300)
   );
-  return new ModalBuilder().setCustomId('application:submit').setTitle('Apply to Ironclad Bot')
-    .addComponents(field('role', 'What role are you applying for?', TextInputStyle.Short),
-      field('experience', 'What experience do you have?', TextInputStyle.Paragraph),
+  return new ModalBuilder().setCustomId(`application:submit:${roleId}`).setTitle('Apply to Ironclad Bot')
+    .addComponents(field('experience', 'What experience do you have?', TextInputStyle.Paragraph),
       field('why', 'Why should we choose you?', TextInputStyle.Paragraph));
 }
 
-async function submitApplication(i, data) {
+async function chooseApplicationRole(i, data) {
+  if (!configValid(data.config)) return i.reply(privateReply('An admin must run /setup first.'));
+  if (data.applications[i.user.id]?.status === 'pending') return i.reply(privateReply('You already have an application awaiting review.'));
+  return i.reply({
+    flags: MessageFlags.Ephemeral,
+    content: 'Choose the server role you are applying for:',
+    components: [new ActionRowBuilder().addComponents(new RoleSelectMenuBuilder()
+      .setCustomId('application:role').setPlaceholder('Choose a role').setMinValues(1).setMaxValues(1))]
+  });
+}
+
+async function submitApplication(i, data, requestedRoleId) {
   const cfg = data.config;
   if (!configValid(cfg)) return i.reply(privateReply('An admin must run /setup first.'));
   if (data.applications[i.user.id]?.status === 'pending') return i.reply(privateReply('You already have an application awaiting review.'));
+  const requestedRole = await i.guild.roles.fetch(requestedRoleId).catch(() => null);
+  const me = await i.guild.members.fetchMe();
+  if (!requestedRole || requestedRole.id === i.guild.id || requestedRole.managed || requestedRole.comparePositionTo(me.roles.highest) >= 0)
+    return i.reply(privateReply('That role cannot be assigned by the bot. Start the application again and choose a regular role below the bot’s highest role.'));
   await i.deferReply({ flags: MessageFlags.Ephemeral });
   const ch = await i.guild.channels.fetch(cfg.applicationsChannelId);
   if (!ch?.isTextBased()) return i.editReply('The applications channel is unavailable. Ask an admin to run /setup again.');
-  const role = i.fields.getTextInputValue('role');
+  const role = requestedRole.name;
   const experience = i.fields.getTextInputValue('experience');
   const why = i.fields.getTextInputValue('why');
   const embed = new EmbedBuilder().setTitle('New application').setColor(0x5865f2)
@@ -201,11 +215,11 @@ async function submitApplication(i, data) {
       embeds: [embed], components: [buttons], allowedMentions: { users: [i.user.id] } });
   } catch (error) { await ticket.delete().catch(console.error); throw error; }
   data.tickets[ticket.id] = { ownerId: i.user.id, type: 'application', status: 'open', createdAt: new Date().toISOString() };
-  data.applications[i.user.id] = { status: 'pending', messageId: msg.id, channelId: ticket.id, role, experience, why, submittedAt: new Date().toISOString() };
+  data.applications[i.user.id] = { status: 'pending', messageId: msg.id, channelId: ticket.id, role, requestedRoleId: requestedRole.id, experience, why, submittedAt: new Date().toISOString() };
   store.save();
-  await i.editReply(`Application submitted. Your private ticket is ${ticket}.`);
-  void push.notify(i.guild, 'application', 'New application', `${i.user.username} submitted an application`, `/g/${i.guildId}/tickets/${ticket.id}`, ticket).catch(console.error);
-  await ch.send({ content: `New application from ${safe(i.user.username)}: ${ticket}`, allowedMentions: mentions }).catch(console.error);
+  await i.editReply(`Application submitted for **${safe(role)}**. Your private ticket is ${ticket}.`);
+  void push.notify(i.guild, 'application', 'New application', `${i.user.username} applied for ${role}`, `/g/${i.guildId}/tickets/${ticket.id}`, ticket).catch(console.error);
+  await ch.send({ content: `New application from ${safe(i.user.username)} for **${safe(role)}**: ${ticket}`, allowedMentions: mentions }).catch(console.error);
 }
 
 async function reviewApplication(i, data, decision, userId) {
@@ -216,7 +230,7 @@ async function reviewApplication(i, data, decision, userId) {
   const reviewer = await i.guild.members.fetch({ user: i.user.id, force: true });
   if (decision === 'approve') {
     if (!applications.reviewerCanAssign(i.guild, reviewer)) return i.reply(privateReply('You need Manage Roles permission to approve and assign a role.'));
-    return i.reply({ flags: MessageFlags.Ephemeral, content: 'Choose the role to give this applicant:',
+    return i.reply({ flags: MessageFlags.Ephemeral, content: `Applicant requested **${safe(app.role || 'a role')}**. Choose the role to give this applicant:`,
       components: [new ActionRowBuilder().addComponents(new RoleSelectMenuBuilder()
         .setCustomId(`application:assign:${userId}`).setPlaceholder('Choose a role').setMinValues(1).setMaxValues(1))] });
   }
@@ -295,11 +309,7 @@ bot.on('interactionCreate', async i => {
         const action = i.options.getSubcommand();
         return action === 'open' ? openTicket(i, data) : ticketAction(i, data, action);
       }
-      if (i.commandName === 'apply') {
-        if (!configValid(data.config)) return i.reply(privateReply('An admin must run /setup first.'));
-        if (data.applications[i.user.id]?.status === 'pending') return i.reply(privateReply('You already have an application awaiting review.'));
-        return i.showModal(applicationModal());
-      }
+      if (i.commandName === 'apply') return chooseApplicationRole(i, data);
       if (i.commandName === 'vouch') return addVouch(i, data);
       if (i.commandName === 'level') {
         const action = i.options.getSubcommand();
@@ -347,15 +357,18 @@ bot.on('interactionCreate', async i => {
       if (i.customId.startsWith('giveaway:enter:')) return giveaways.enter(i, data);
       if (i.customId === 'ticket:open') return openTicket(i, data);
       if (i.customId === 'ticket:close') return ticketAction(i, data, 'close');
-      if (i.customId === 'application:open') {
-        if (!configValid(data.config)) return i.reply(privateReply('An admin must run /setup first.'));
-        if (data.applications[i.user.id]?.status === 'pending') return i.reply(privateReply('You already have an application awaiting review.'));
-        return i.showModal(applicationModal());
-      }
+      if (i.customId === 'application:open') return chooseApplicationRole(i, data);
       const review = /^application:(approve|reject):(\d+)$/.exec(i.customId);
       if (review) return reviewApplication(i, data, review[1], review[2]);
     }
     if (i.isRoleSelectMenu()) {
+      if (i.customId === 'application:role') {
+        const role = await i.guild.roles.fetch(i.values[0]).catch(() => null);
+        const me = await i.guild.members.fetchMe();
+        if (!role || role.id === i.guild.id || role.managed || role.comparePositionTo(me.roles.highest) >= 0)
+          return i.reply(privateReply('That role cannot be assigned by the bot. Choose a regular role below the bot’s highest role.'));
+        return i.showModal(applicationModal(role.id));
+      }
       const assign = /^application:assign:(\d{17,22})$/.exec(i.customId);
       if (assign) {
         if (!staff(i, data.config)) return i.reply(privateReply('Only staff can review applications.'));
@@ -366,7 +379,10 @@ bot.on('interactionCreate', async i => {
         return i.followUp(privateReply(`Application approved. ${role.name} was assigned.`));
       }
     }
-    if (i.isModalSubmit() && i.customId === 'application:submit') return submitApplication(i, data);
+    if (i.isModalSubmit()) {
+      const submit = /^application:submit:(\d{17,22})$/.exec(i.customId);
+      if (submit) return submitApplication(i, data, submit[1]);
+    }
   } catch (err) {
     console.error('Interaction failed:', err);
     const message = privateReply('Something went wrong. Check my channel permissions or ask the bot owner to check the logs.');
