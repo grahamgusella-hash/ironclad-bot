@@ -1,5 +1,5 @@
 // Only the generic offline page is cached. Signed-in pages and actions always use the network.
-const CACHE = 'ironclad-offline-v4';
+const CACHE = 'ironclad-offline-v5';
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.add('/offline.html')).then(() => self.skipWaiting()));
 });
@@ -10,8 +10,13 @@ self.addEventListener('activate', event => {
   ]));
 });
 self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url);
   if (event.request.mode === 'navigate') {
-    event.respondWith(fetch(event.request).catch(() => caches.match('/offline.html')));
+    event.respondWith(fetch(event.request, { cache: 'no-store' }).catch(() => caches.match('/offline.html')));
+    return;
+  }
+  if (url.origin === self.location.origin && url.pathname === '/app.js') {
+    event.respondWith(fetch(event.request, { cache: 'no-store' }));
   }
 });
 self.addEventListener('push', event => {
