@@ -1,312 +1,71 @@
-// Ironclad visual theme: animated galaxy, stars, shooting stars, and optional UI sounds.
+// Ironclad website UI: themes, sounds, navigation, play-money casino, notifications, and live tickets.
 (() => {
   const style = document.createElement('style');
   style.textContent = `
-    html,body{min-height:100%}
-    body{
-      position:relative;
-      overflow-x:hidden;
-      background:
-        radial-gradient(circle at 18% 22%,rgba(103,55,190,.34),transparent 33%),
-        radial-gradient(circle at 82% 18%,rgba(31,104,214,.28),transparent 31%),
-        radial-gradient(circle at 55% 78%,rgba(134,46,175,.22),transparent 36%),
-        linear-gradient(145deg,#050711 0%,#090d21 38%,#100a26 70%,#03050d 100%);
-      background-attachment:fixed;
-    }
-    body::before,body::after{
-      content:"";position:fixed;inset:0;pointer-events:none;z-index:-3;
-    }
-    body::before{
-      opacity:.8;
-      background-image:
-        radial-gradient(circle,#fff 0 1px,transparent 1.4px),
-        radial-gradient(circle,#a7c6ff 0 1px,transparent 1.5px),
-        radial-gradient(circle,#d8b7ff 0 1.2px,transparent 1.7px);
-      background-size:71px 71px,113px 113px,167px 167px;
-      background-position:0 0,37px 22px,74px 51px;
-      animation:ironclad-stars 90s linear infinite;
-    }
-    body::after{
-      background:
-        radial-gradient(ellipse at 30% 45%,rgba(113,78,255,.12),transparent 30%),
-        radial-gradient(ellipse at 75% 65%,rgba(35,124,255,.10),transparent 30%);
-      filter:blur(24px);
-      animation:ironclad-nebula 14s ease-in-out infinite alternate;
-    }
-    @keyframes ironclad-stars{to{background-position:71px 71px,150px 135px,241px 218px}}
-    @keyframes ironclad-nebula{from{transform:scale(1)}to{transform:scale(1.08) translate3d(1.5%,-1%,0)}}
-    header{background:rgba(9,12,29,.82)!important;backdrop-filter:blur(15px);box-shadow:0 8px 30px rgba(0,0,0,.22)}
-    main{position:relative;z-index:1}
-    .card,.message{background:rgba(19,24,48,.84)!important;backdrop-filter:blur(11px);box-shadow:0 10px 32px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.035);border-color:rgba(117,137,220,.30)!important}
-    button,.button{transition:transform .14s ease,box-shadow .14s ease,filter .14s ease,background .14s ease;box-shadow:0 0 0 rgba(115,136,255,0)}
-    button:hover:not(:disabled),.button:hover{transform:translateY(-1px);box-shadow:0 0 18px rgba(115,136,255,.38),0 5px 18px rgba(0,0,0,.22);filter:brightness(1.08)}
-    button:active:not(:disabled),.button:active{transform:translateY(1px) scale(.985)}
-    .brand{text-shadow:0 0 18px rgba(145,159,255,.55)}
-    .ironclad-shooting-star{position:fixed;z-index:-1;width:3px;height:3px;border-radius:50%;background:#fff;pointer-events:none;box-shadow:0 0 7px 2px rgba(215,229,255,.9);animation:ironclad-shoot var(--shoot-time,1.35s) linear forwards}
-    .ironclad-shooting-star::after{content:"";position:absolute;right:1px;top:1px;width:150px;height:1px;transform-origin:right center;background:linear-gradient(90deg,transparent,rgba(164,201,255,.15),rgba(255,255,255,.92));}
-    @keyframes ironclad-shoot{0%{opacity:0;transform:translate3d(0,0,0) rotate(-32deg)}8%{opacity:1}100%{opacity:0;transform:translate3d(-520px,330px,0) rotate(-32deg)}}
-    #ironclad-sound-toggle{position:fixed;right:18px;bottom:18px;z-index:50;padding:9px 12px;border:1px solid rgba(150,166,255,.32);border-radius:999px;background:rgba(16,20,45,.88);color:#eef1ff;font:600 13px system-ui,sans-serif;backdrop-filter:blur(10px);box-shadow:0 6px 24px rgba(0,0,0,.3);cursor:pointer}
-    #ironclad-sound-toggle:hover{box-shadow:0 0 18px rgba(115,136,255,.35),0 6px 24px rgba(0,0,0,.3)}
-    @media (prefers-reduced-motion:reduce){body::before,body::after{animation:none}.ironclad-shooting-star{display:none}button,.button{transition:none}}
+    html,body{min-height:100%} body{position:relative;overflow-x:hidden;background:radial-gradient(circle at 18% 22%,rgba(103,55,190,.34),transparent 33%),radial-gradient(circle at 82% 18%,rgba(31,104,214,.28),transparent 31%),radial-gradient(circle at 55% 78%,rgba(134,46,175,.22),transparent 36%),linear-gradient(145deg,#050711 0%,#090d21 38%,#100a26 70%,#03050d 100%);background-attachment:fixed}
+    body::before,body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:-3} body::before{opacity:.8;background-image:radial-gradient(circle,#fff 0 1px,transparent 1.4px),radial-gradient(circle,#a7c6ff 0 1px,transparent 1.5px),radial-gradient(circle,#d8b7ff 0 1.2px,transparent 1.7px);background-size:71px 71px,113px 113px,167px 167px;background-position:0 0,37px 22px,74px 51px;animation:ironclad-stars 90s linear infinite} body::after{background:radial-gradient(ellipse at 30% 45%,rgba(113,78,255,.12),transparent 30%),radial-gradient(ellipse at 75% 65%,rgba(35,124,255,.10),transparent 30%);filter:blur(24px);animation:ironclad-nebula 14s ease-in-out infinite alternate}
+    @keyframes ironclad-stars{to{background-position:71px 71px,150px 135px,241px 218px}} @keyframes ironclad-nebula{from{transform:scale(1)}to{transform:scale(1.08) translate3d(1.5%,-1%,0)}}
+    header{background:rgba(9,12,29,.82)!important;backdrop-filter:blur(15px);box-shadow:0 8px 30px rgba(0,0,0,.22)} main{position:relative;z-index:1}.card,.message{background:rgba(19,24,48,.84)!important;backdrop-filter:blur(11px);box-shadow:0 10px 32px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.035);border-color:rgba(117,137,220,.30)!important}
+    button,.button{transition:transform .14s ease,box-shadow .14s ease,filter .14s ease,background .14s ease} button:hover:not(:disabled),.button:hover{transform:translateY(-1px);box-shadow:0 0 18px rgba(115,136,255,.38),0 5px 18px rgba(0,0,0,.22);filter:brightness(1.08)} button:active:not(:disabled),.button:active{transform:translateY(1px) scale(.985)} .brand{text-shadow:0 0 18px rgba(145,159,255,.55)}
+    .ironclad-shooting-star{position:fixed;z-index:-1;width:3px;height:3px;border-radius:50%;background:#fff;pointer-events:none;box-shadow:0 0 7px 2px rgba(215,229,255,.9);animation:ironclad-shoot var(--shoot-time,1.35s) linear forwards}.ironclad-shooting-star::after{content:"";position:absolute;right:1px;top:1px;width:150px;height:1px;background:linear-gradient(90deg,transparent,rgba(164,201,255,.15),rgba(255,255,255,.92))}@keyframes ironclad-shoot{0%{opacity:0;transform:translate3d(0,0,0) rotate(-32deg)}8%{opacity:1}100%{opacity:0;transform:translate3d(-520px,330px,0) rotate(-32deg)}}
+    #ironclad-sound-toggle{position:fixed;right:18px;bottom:18px;z-index:90;padding:9px 12px;border:1px solid rgba(150,166,255,.32);border-radius:999px;background:rgba(16,20,45,.92);color:#eef1ff;font:600 13px system-ui,sans-serif;backdrop-filter:blur(10px);cursor:pointer}
+    #ironclad-theme-panel{position:fixed;left:18px;bottom:18px;z-index:90;display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:14px;border:1px solid rgba(150,166,255,.28);background:rgba(12,16,34,.9);backdrop-filter:blur(12px)}#ironclad-theme-panel label{margin:0;font-size:12px;color:#dce4ff;font-weight:700}#ironclad-theme-select{width:auto;min-width:145px;padding:7px 9px;border-radius:9px;background:rgba(8,12,28,.96);color:#fff}
+    #ironclad-site-menu{position:fixed;right:18px;bottom:66px;z-index:100;font:600 14px system-ui,sans-serif}#ironclad-site-menu summary{list-style:none;cursor:pointer;padding:10px 14px;border-radius:999px;border:1px solid rgba(150,166,255,.35);background:rgba(16,20,45,.94);color:#eef1ff;box-shadow:0 7px 24px rgba(0,0,0,.35);backdrop-filter:blur(12px)}#ironclad-site-menu summary::-webkit-details-marker{display:none}#ironclad-site-menu[open] summary{border-radius:12px 12px 0 0}#ironclad-site-menu .site-menu-links{display:grid;min-width:175px;padding:7px;background:rgba(12,16,36,.98);border:1px solid rgba(150,166,255,.35);border-top:0;border-radius:0 0 12px 12px}#ironclad-site-menu a{display:block;padding:10px 12px;border-radius:8px;color:#eef1ff;text-decoration:none}#ironclad-site-menu a:hover{background:rgba(120,140,255,.18);text-decoration:none}
+    .ironclad-hero{text-align:center;padding:54px 20px 30px}.ironclad-hero h1{font-size:clamp(42px,8vw,78px);margin:0 0 12px;text-shadow:0 0 28px rgba(125,145,255,.45)}.ironclad-hero p{max-width:720px;margin:0 auto 24px;font-size:18px}.casino-balance{font-size:26px;font-weight:800;margin:12px 0 6px}.casino-result{min-height:28px;font-weight:700;margin-top:14px}.casino-game .slots{font-size:44px;letter-spacing:8px;margin:16px 0}.casino-game input{max-width:180px}.casino-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:end}.casino-note{font-size:13px;color:#a5aec6}
+    body[data-theme="cyber"]{background:radial-gradient(circle at 20% 20%,rgba(0,255,240,.18),transparent 28%),radial-gradient(circle at 80% 25%,rgba(255,0,200,.18),transparent 30%),linear-gradient(135deg,#020208,#070318 48%,#02020a)!important} body[data-theme="cyber"] .card,body[data-theme="cyber"] .message{border-color:rgba(0,255,235,.28)!important} body[data-theme="cyber"] button,body[data-theme="cyber"] .button{background:#0b8fa0}
+    body[data-theme="minecraft"]{background:linear-gradient(#071327 0%,#0b1d39 55%,#152714 56%,#0d170d 100%)!important} body[data-theme="minecraft"] .card,body[data-theme="minecraft"] .message{background:rgba(17,31,24,.88)!important;border-color:rgba(105,150,90,.34)!important} body[data-theme="minecraft"] button,body[data-theme="minecraft"] .button{background:#3e7a3a}
+    body[data-theme="ocean"]{background:radial-gradient(circle at 25% 18%,rgba(0,170,255,.16),transparent 30%),linear-gradient(180deg,#02111c 0%,#031c2d 45%,#01101a 100%)!important} body[data-theme="ocean"] .card,body[data-theme="ocean"] .message{background:rgba(5,28,42,.88)!important;border-color:rgba(70,170,210,.28)!important} body[data-theme="ocean"] button,body[data-theme="ocean"] .button{background:#147da3}
+    body[data-theme="ember"]{background:radial-gradient(circle at 20% 25%,rgba(255,90,20,.20),transparent 30%),linear-gradient(145deg,#150603 0%,#260b05 45%,#090201 100%)!important} body[data-theme="ember"] .card,body[data-theme="ember"] .message{background:rgba(38,14,10,.88)!important;border-color:rgba(220,92,55,.30)!important} body[data-theme="ember"] button,body[data-theme="ember"] .button{background:#a74428} body[data-theme]:not([data-theme="galaxy"]) .ironclad-shooting-star{display:none!important}
+    @media(max-width:680px){#ironclad-theme-panel{left:10px;bottom:64px}#ironclad-sound-toggle{right:10px;bottom:14px}#ironclad-site-menu{right:10px;bottom:62px}.ironclad-hero{padding-top:28px}}
+    @media(prefers-reduced-motion:reduce){body::before,body::after{animation:none}.ironclad-shooting-star{display:none}}
   `;
   document.head.appendChild(style);
 
-  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  function shootingStar() {
-    if (reducedMotion || document.hidden || document.body.dataset.theme !== 'galaxy') return;
-    const star = document.createElement('span');
-    star.className = 'ironclad-shooting-star';
-    star.style.left = `${65 + Math.random() * 35}vw`;
-    star.style.top = `${Math.random() * 42}vh`;
-    star.style.setProperty('--shoot-time', `${1.05 + Math.random() * .75}s`);
-    document.body.appendChild(star);
-    setTimeout(() => star.remove(), 2200);
-  }
-  if (!reducedMotion) {
-    setTimeout(shootingStar, 1200 + Math.random() * 2200);
-    setInterval(() => { if (Math.random() < .65) shootingStar(); }, 6500);
-  }
+  const themes={galaxy:'Galaxy',cyber:'Cyber Neon',minecraft:'Minecraft Night',ocean:'Deep Ocean',ember:'Ember'};
+  const themePanel=document.createElement('div'); themePanel.id='ironclad-theme-panel';
+  const themeLabel=document.createElement('label'); themeLabel.htmlFor='ironclad-theme-select'; themeLabel.textContent='Theme';
+  const themeSelect=document.createElement('select'); themeSelect.id='ironclad-theme-select';
+  Object.entries(themes).forEach(([value,name])=>{const o=document.createElement('option');o.value=value;o.textContent=name;themeSelect.appendChild(o)});
+  themePanel.append(themeLabel,themeSelect); document.body.appendChild(themePanel);
+  const savedTheme=localStorage.getItem('ironclad-theme'); const initialTheme=themes[savedTheme]?savedTheme:'galaxy'; document.body.dataset.theme=initialTheme; themeSelect.value=initialTheme;
+  themeSelect.addEventListener('change',()=>{document.body.dataset.theme=themeSelect.value;localStorage.setItem('ironclad-theme',themeSelect.value)});
 
-  const toggle = document.createElement('button');
-  toggle.type = 'button';
-  toggle.id = 'ironclad-sound-toggle';
-  toggle.setAttribute('aria-pressed', 'false');
-  document.body.appendChild(toggle);
+  const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function shootingStar(){if(reducedMotion||document.hidden||document.body.dataset.theme!=='galaxy')return;const star=document.createElement('span');star.className='ironclad-shooting-star';star.style.left=`${65+Math.random()*35}vw`;star.style.top=`${Math.random()*42}vh`;star.style.setProperty('--shoot-time',`${1.05+Math.random()*.75}s`);document.body.appendChild(star);setTimeout(()=>star.remove(),2200)}
+  if(!reducedMotion){setTimeout(shootingStar,1400);setInterval(()=>{if(Math.random()<.65)shootingStar()},6500)}
 
-  let soundOn = localStorage.getItem('ironclad-ui-sounds') === 'on';
-  let audioContext;
-  function updateToggle() {
-    toggle.textContent = soundOn ? '🔊 UI Sounds: On' : '🔇 UI Sounds: Off';
-    toggle.setAttribute('aria-pressed', String(soundOn));
-  }
-  function ctx() {
-    audioContext ||= new (window.AudioContext || window.webkitAudioContext)();
-    if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
-    return audioContext;
-  }
-  function tone(kind) {
-    if (!soundOn) return;
-    try {
-      const ac = ctx();
-      const osc = ac.createOscillator();
-      const gain = ac.createGain();
-      const now = ac.currentTime;
-      osc.type = kind === 'click' ? 'sine' : 'triangle';
-      osc.frequency.setValueAtTime(kind === 'click' ? 410 : 690, now);
-      osc.frequency.exponentialRampToValueAtTime(kind === 'click' ? 260 : 545, now + (kind === 'click' ? .075 : .045));
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(kind === 'click' ? .075 : .028, now + .008);
-      gain.gain.exponentialRampToValueAtTime(.0001, now + (kind === 'click' ? .09 : .055));
-      osc.connect(gain); gain.connect(ac.destination);
-      osc.start(now); osc.stop(now + .11);
-    } catch (_) {}
-  }
-  toggle.addEventListener('click', () => {
-    soundOn = !soundOn;
-    localStorage.setItem('ironclad-ui-sounds', soundOn ? 'on' : 'off');
-    updateToggle();
-    if (soundOn) tone('click');
-  });
-  updateToggle();
+  const soundToggle=document.createElement('button');soundToggle.type='button';soundToggle.id='ironclad-sound-toggle';document.body.appendChild(soundToggle);
+  let soundOn=localStorage.getItem('ironclad-ui-sounds')==='on';let audioContext;
+  function updateSound(){soundToggle.textContent=soundOn?'🔊 UI Sounds: On':'🔇 UI Sounds: Off';soundToggle.setAttribute('aria-pressed',String(soundOn))}
+  function tone(kind){if(!soundOn)return;try{audioContext||=new(window.AudioContext||window.webkitAudioContext)();if(audioContext.state==='suspended')audioContext.resume().catch(()=>{});const osc=audioContext.createOscillator(),gain=audioContext.createGain(),now=audioContext.currentTime;osc.type=kind==='click'?'sine':'triangle';osc.frequency.setValueAtTime(kind==='click'?410:690,now);osc.frequency.exponentialRampToValueAtTime(kind==='click'?260:545,now+.07);gain.gain.setValueAtTime(.0001,now);gain.gain.exponentialRampToValueAtTime(kind==='click'?.075:.028,now+.008);gain.gain.exponentialRampToValueAtTime(.0001,now+.09);osc.connect(gain);gain.connect(audioContext.destination);osc.start(now);osc.stop(now+.11)}catch(_){}}
+  soundToggle.addEventListener('click',()=>{soundOn=!soundOn;localStorage.setItem('ironclad-ui-sounds',soundOn?'on':'off');updateSound();if(soundOn)tone('click')});updateSound();
+  let lastHover;document.addEventListener('pointerover',e=>{const t=e.target.closest('button,.button,a[href],select');if(!t||t===lastHover||t.disabled||t.id==='ironclad-sound-toggle')return;lastHover=t;tone('hover')});document.addEventListener('pointerout',e=>{const t=e.target.closest('button,.button,a[href],select');if(t===lastHover&&!t?.contains(e.relatedTarget))lastHover=null});document.addEventListener('pointerdown',e=>{const t=e.target.closest('button,.button,a[href],select');if(t&&t.id!=='ironclad-sound-toggle'&&!t.disabled)tone('click')});
 
-  let lastHover;
-  document.addEventListener('pointerover', event => {
-    const target = event.target.closest('button,.button,a[href],select');
-    if (!target || target === lastHover || target.disabled || target.id === 'ironclad-sound-toggle') return;
-    lastHover = target;
-    tone('hover');
-  });
-  document.addEventListener('pointerout', event => {
-    const target = event.target.closest('button,.button,a[href],select');
-    if (target === lastHover && !target?.contains(event.relatedTarget)) lastHover = null;
-  });
-  document.addEventListener('pointerdown', event => {
-    const target = event.target.closest('button,.button,a[href],select');
-    if (target && target.id !== 'ironclad-sound-toggle' && !target.disabled) tone('click');
-  });
-})();
+  const menu=document.createElement('details');menu.id='ironclad-site-menu';menu.innerHTML='<summary>☰ Menu</summary><div class="site-menu-links"><a href="/#home">🏠 Home</a><a href="/#casino">🎰 Casino</a><a href="/#dashboard">🛠 Dashboard</a></div>';document.body.appendChild(menu);
 
-// Theme picker. Choice is stored per browser/device.
-(() => {
-  const themes = {
-    galaxy: 'Galaxy',
-    cyber: 'Cyber Neon',
-    minecraft: 'Minecraft Night',
-    ocean: 'Deep Ocean',
-    ember: 'Ember'
-  };
-
-  const style = document.createElement('style');
-  style.textContent = `
-    #ironclad-theme-panel{position:fixed;left:18px;bottom:18px;z-index:50;display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:14px;border:1px solid rgba(150,166,255,.28);background:rgba(12,16,34,.88);backdrop-filter:blur(12px);box-shadow:0 8px 28px rgba(0,0,0,.32)}
-    #ironclad-theme-panel label{margin:0;font-size:12px;color:#dce4ff;font-weight:700}
-    #ironclad-theme-select{width:auto;min-width:145px;padding:7px 9px;border-radius:9px;background:rgba(8,12,28,.96);border:1px solid rgba(126,148,235,.42);color:white}
-    body[data-theme="cyber"]{background:radial-gradient(circle at 20% 20%,rgba(0,255,240,.18),transparent 28%),radial-gradient(circle at 80% 25%,rgba(255,0,200,.18),transparent 30%),linear-gradient(135deg,#020208,#070318 48%,#02020a)!important}
-    body[data-theme="cyber"]::before{background-image:linear-gradient(rgba(0,255,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(255,0,220,.07) 1px,transparent 1px)!important;background-size:44px 44px!important;opacity:.65!important;animation:ironclad-cyber-grid 12s linear infinite!important}
-    body[data-theme="cyber"]::after{background:radial-gradient(circle at 50% 40%,rgba(0,255,230,.10),transparent 34%),radial-gradient(circle at 65% 75%,rgba(255,0,220,.10),transparent 28%)!important}
-    body[data-theme="cyber"] .card,body[data-theme="cyber"] .message{border-color:rgba(0,255,235,.28)!important;box-shadow:0 0 24px rgba(0,255,235,.08),inset 0 1px 0 rgba(255,255,255,.03)}
-    body[data-theme="cyber"] button,body[data-theme="cyber"] .button{background:#0b8fa0}
-    @keyframes ironclad-cyber-grid{to{background-position:44px 44px,44px 44px}}
-
-    body[data-theme="minecraft"]{background:linear-gradient(#071327 0%,#0b1d39 55%,#152714 56%,#0d170d 100%)!important}
-    body[data-theme="minecraft"]::before{background-image:radial-gradient(circle,#fff 0 1px,transparent 1.5px),radial-gradient(circle,#9fc8ff 0 1px,transparent 1.5px)!important;background-size:90px 90px,145px 145px!important;opacity:.7!important;animation:ironclad-stars 120s linear infinite!important}
-    body[data-theme="minecraft"]::after{background:linear-gradient(90deg,transparent 0 12%,rgba(80,120,70,.10) 12% 18%,transparent 18% 100%)!important;filter:none!important;animation:none!important}
-    body[data-theme="minecraft"] .card,body[data-theme="minecraft"] .message{background:rgba(17,31,24,.88)!important;border-color:rgba(105,150,90,.34)!important}
-    body[data-theme="minecraft"] button,body[data-theme="minecraft"] .button{background:#3e7a3a}
-
-    body[data-theme="ocean"]{background:radial-gradient(circle at 25% 18%,rgba(0,170,255,.16),transparent 30%),radial-gradient(circle at 75% 75%,rgba(0,90,160,.18),transparent 34%),linear-gradient(180deg,#02111c 0%,#031c2d 45%,#01101a 100%)!important}
-    body[data-theme="ocean"]::before{background-image:radial-gradient(circle,rgba(180,235,255,.9) 0 1px,transparent 1.5px),radial-gradient(circle,rgba(120,210,255,.65) 0 1px,transparent 1.5px)!important;background-size:120px 120px,180px 180px!important;opacity:.35!important;animation:ironclad-ocean-drift 28s linear infinite!important}
-    body[data-theme="ocean"]::after{background:radial-gradient(ellipse at 50% 110%,rgba(0,180,220,.16),transparent 40%)!important}
-    body[data-theme="ocean"] .card,body[data-theme="ocean"] .message{background:rgba(5,28,42,.88)!important;border-color:rgba(70,170,210,.28)!important}
-    body[data-theme="ocean"] button,body[data-theme="ocean"] .button{background:#147da3}
-    @keyframes ironclad-ocean-drift{to{background-position:0 -120px,0 -180px}}
-
-    body[data-theme="ember"]{background:radial-gradient(circle at 20% 25%,rgba(255,90,20,.20),transparent 30%),radial-gradient(circle at 80% 70%,rgba(180,30,0,.18),transparent 34%),linear-gradient(145deg,#150603 0%,#260b05 45%,#090201 100%)!important}
-    body[data-theme="ember"]::before{background-image:radial-gradient(circle,rgba(255,190,100,.95) 0 1px,transparent 1.5px),radial-gradient(circle,rgba(255,80,30,.7) 0 1px,transparent 1.5px)!important;background-size:75px 75px,130px 130px!important;opacity:.45!important;animation:ironclad-embers 18s linear infinite!important}
-    body[data-theme="ember"]::after{background:radial-gradient(ellipse at 50% 100%,rgba(255,70,0,.18),transparent 35%)!important}
-    body[data-theme="ember"] .card,body[data-theme="ember"] .message{background:rgba(38,14,10,.88)!important;border-color:rgba(220,92,55,.30)!important}
-    body[data-theme="ember"] button,body[data-theme="ember"] .button{background:#a74428}
-    @keyframes ironclad-embers{to{background-position:30px -120px,-25px -180px}}
-
-    body[data-theme]:not([data-theme="galaxy"]) .ironclad-shooting-star{display:none!important}
-    @media(max-width:680px){#ironclad-theme-panel{left:10px;bottom:64px}#ironclad-sound-toggle{right:10px;bottom:14px}}
-  `;
-  document.head.appendChild(style);
-
-  const panel = document.createElement('div');
-  panel.id = 'ironclad-theme-panel';
-  const label = document.createElement('label');
-  label.htmlFor = 'ironclad-theme-select';
-  label.textContent = 'Theme';
-  const select = document.createElement('select');
-  select.id = 'ironclad-theme-select';
-  for (const [value, name] of Object.entries(themes)) {
-    const option = document.createElement('option');
-    option.value = value;
-    option.textContent = name;
-    select.appendChild(option);
-  }
-  panel.append(label, select);
-  document.body.appendChild(panel);
-
-  const saved = localStorage.getItem('ironclad-theme');
-  const initial = themes[saved] ? saved : 'galaxy';
-  document.body.dataset.theme = initial;
-  select.value = initial;
-
-  select.addEventListener('change', () => {
-    document.body.dataset.theme = select.value;
-    localStorage.setItem('ironclad-theme', select.value);
-  });
-})();
-
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', async () => {
-    const button = document.getElementById('push-toggle');
-    const status = document.getElementById('push-status');
-    try {
-      const registration = await navigator.serviceWorker.register('/sw.js');
-      if (!button) return;
-      if (!('PushManager' in window) || !('Notification' in window)) {
-        status.textContent = 'This browser does not support phone notifications.';
-        button.disabled = true;
-        return;
+  if(location.pathname==='/'){
+    const main=document.querySelector('main');
+    if(main){
+      const dashboardHtml=main.innerHTML;
+      let chips=Math.max(0,Math.min(1000000000,Number(localStorage.getItem('ironclad-casino-chips')||1000)||1000));
+      const saveChips=()=>localStorage.setItem('ironclad-casino-chips',String(chips));
+      const randomInt=max=>{const a=new Uint32Array(1);crypto.getRandomValues(a);return a[0]%max};
+      function home(){main.innerHTML='<section class="ironclad-hero"><span class="pill">IRONCLAD</span><h1>Your server. One place.</h1><p class="muted">Manage your Discord community, use the staff dashboard, and play in the virtual casino from one site.</p><p class="row" style="justify-content:center"><a class="button" href="/#dashboard">Open Dashboard</a><a class="button" href="/#casino">Play Casino</a></p></section><div class="grid"><div class="card"><h2>🛠 Discord Dashboard</h2><p>Tickets, applications, vouches, giveaways, polls, and server tools.</p><a href="/#dashboard">Go to dashboard →</a></div><div class="card"><h2>🎰 Virtual Casino</h2><p>Coin Flip and Slots using virtual chips only.</p><a href="/#casino">Enter casino →</a></div><div class="card"><h2>✨ Themes</h2><p>Galaxy, Cyber Neon, Minecraft Night, Deep Ocean, and Ember.</p></div></div>'}
+      function casino(message=''){
+        main.innerHTML=`<div class="row"><h1>🎰 Ironclad Casino</h1><span class="pill">Play money only</span></div><p class="muted">Virtual chips have no cash value and cannot be bought, sold, deposited, or withdrawn.</p><div class="card"><div class="casino-balance">🪙 <span id="casino-chip-count">${chips.toLocaleString()}</span> chips</div><p class="casino-note">Your demo-chip balance is saved on this browser.</p><button type="button" id="casino-reset">Reset to 1,000 chips</button></div><div class="grid"><div class="card casino-game"><h2>🪙 Coin Flip</h2><p>Pick heads or tails. A win pays 2× your bet.</p><div class="casino-actions"><div><label for="coin-bet">Bet</label><input id="coin-bet" type="number" min="1" max="1000000" value="10"></div><button type="button" data-coin="heads">Heads</button><button type="button" data-coin="tails">Tails</button></div><p id="coin-result" class="casino-result">${message}</p></div><div class="card casino-game"><h2>🎰 Slots</h2><p>Three matching symbols pay 6×. Two matching symbols pay 2×.</p><div id="slot-reels" class="slots">🍒 ⭐ 💎</div><div class="casino-actions"><div><label for="slot-bet">Bet</label><input id="slot-bet" type="number" min="1" max="1000000" value="10"></div><button type="button" id="slot-spin">Spin</button></div><p id="slot-result" class="casino-result"></p></div></div>`;
+        const update=()=>{const el=document.getElementById('casino-chip-count');if(el)el.textContent=chips.toLocaleString();saveChips()};
+        const betFrom=id=>{const bet=Number(document.getElementById(id)?.value||0);return Number.isSafeInteger(bet)&&bet>0&&bet<=chips?bet:0};
+        document.querySelectorAll('[data-coin]').forEach(button=>button.addEventListener('click',()=>{const bet=betFrom('coin-bet'),result=document.getElementById('coin-result');if(!bet){result.textContent='Enter a valid bet no larger than your balance.';return}const landed=randomInt(2)?'heads':'tails';chips-=bet;if(button.dataset.coin===landed){chips+=bet*2;result.textContent=`It landed ${landed} — you won ${bet.toLocaleString()} chips!`}else result.textContent=`It landed ${landed} — you lost ${bet.toLocaleString()} chips.`;update()}));
+        document.getElementById('slot-spin')?.addEventListener('click',()=>{const bet=betFrom('slot-bet'),result=document.getElementById('slot-result');if(!bet){result.textContent='Enter a valid bet no larger than your balance.';return}const symbols=['🍒','⭐','💎','🍀','7️⃣'],reels=[symbols[randomInt(symbols.length)],symbols[randomInt(symbols.length)],symbols[randomInt(symbols.length)]];document.getElementById('slot-reels').textContent=reels.join(' ');chips-=bet;const counts=reels.map(s=>reels.filter(x=>x===s).length);let payout=0;if(counts.includes(3))payout=bet*6;else if(counts.includes(2))payout=bet*2;chips+=payout;result.textContent=payout?`You won ${(payout-bet).toLocaleString()} chips!`:`No match — you lost ${bet.toLocaleString()} chips.`;update()});
+        document.getElementById('casino-reset')?.addEventListener('click',()=>{chips=1000;saveChips();casino('Balance reset to 1,000 demo chips.')});
       }
-      async function send(action, subscription) {
-        const fields = new URLSearchParams({ action, guildId: button.dataset.guild,
-          csrf: button.dataset.csrf, subscription: JSON.stringify(subscription) });
-        const response = await fetch('/push', { method: 'POST', body: fields, credentials: 'same-origin' });
-        if (!response.ok) throw new Error('Could not save your notification preference. Sign in again and retry.');
-        return response.json();
-      }
-      function display(subscribed) {
-        button.dataset.subscribed = subscribed ? 'yes' : 'no';
-        button.textContent = subscribed ? 'Turn off notifications on this phone' : 'Enable notifications on this phone';
-        status.textContent = subscribed ? 'Alerts are on for this server.' : 'Alerts are off for this server.';
-      }
-      const current = await registration.pushManager.getSubscription();
-      if (current) display((await send('status', current.toJSON())).subscribed);
-      else display(false);
-      button.addEventListener('click', async () => {
-        button.disabled = true;
-        status.textContent = 'Updating notifications…';
-        try {
-          if (button.dataset.subscribed === 'yes') {
-            const subscription = await registration.pushManager.getSubscription();
-            if (!subscription) throw new Error('No phone subscription found. Reload and try again.');
-            await send('unsubscribe', subscription.toJSON());
-            display(false);
-          } else {
-            if (Notification.permission === 'denied') throw new Error('Allow notifications for this site in your phone settings.');
-            if (Notification.permission !== 'granted' && await Notification.requestPermission() !== 'granted')
-              throw new Error('Phone notification permission was not granted.');
-            let subscription = await registration.pushManager.getSubscription();
-            subscription ||= await registration.pushManager.subscribe({ userVisibleOnly: true,
-              applicationServerKey: button.dataset.key });
-            await send('subscribe', subscription.toJSON());
-            display(true);
-          }
-        } catch (error) { status.textContent = error.message || 'Could not enable notifications.'; }
-        finally { button.disabled = false; }
-      });
-    } catch (error) {
-      if (status) status.textContent = 'Phone notifications could not start. Try reloading.';
-    }
-  });
-}
-
-// Keep server overview, ticket list, and individual ticket conversations fresh.
-(() => {
-  const ticketDetail = /^\/g\/\d+\/tickets\/\d+$/.test(location.pathname);
-  const livePage = ticketDetail || location.pathname === '/' || /^\/g\/\d+(?:\/tickets)?$/.test(location.pathname);
-  if (!livePage) return;
-
-  let checking = false;
-  const editing = () => {
-    const el = document.activeElement;
-    return el && ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(el.tagName);
-  };
-
-  function replaceTicketMessages(nextMain, currentMain) {
-    const currentMessages = [...currentMain.querySelectorAll('.message')];
-    const nextMessages = [...nextMain.querySelectorAll('.message')];
-    const currentSignature = currentMessages.map(node => node.innerHTML).join('\n');
-    const nextSignature = nextMessages.map(node => node.innerHTML).join('\n');
-    if (currentSignature === nextSignature) return;
-
-    const firstMessage = currentMessages[0];
-    const anchor = firstMessage || currentMain.querySelector('hr.divider');
-    if (!anchor) return;
-
-    currentMessages.forEach(node => node.remove());
-    nextMessages.forEach(node => anchor.parentNode.insertBefore(node.cloneNode(true), anchor));
-  }
-
-  async function refreshIfChanged() {
-    if (checking || document.visibilityState !== 'visible') return;
-    if (!ticketDetail && editing()) return;
-    checking = true;
-    try {
-      const response = await fetch(`${location.pathname}${location.search}${location.search ? '&' : '?'}_=${Date.now()}`, {
-        credentials: 'same-origin',
-        cache: 'no-store',
-        headers: { 'X-Ironclad-Refresh': '1' }
-      });
-      if (!response.ok) return;
-      const html = await response.text();
-      const nextMain = new DOMParser().parseFromString(html, 'text/html').querySelector('main');
-      const currentMain = document.querySelector('main');
-      if (!nextMain || !currentMain) return;
-
-      if (ticketDetail) replaceTicketMessages(nextMain, currentMain);
-      else if (nextMain.innerHTML !== currentMain.innerHTML) currentMain.innerHTML = nextMain.innerHTML;
-    } catch (_) {
-      // Temporary network issues should not interrupt the dashboard.
-    } finally {
-      checking = false;
+      function showView(){menu.open=false;const view=location.hash||'#home';if(view==='#casino')casino();else if(view==='#dashboard')main.innerHTML=dashboardHtml;else home()}
+      addEventListener('hashchange',showView);showView();
     }
   }
-
-  refreshIfChanged();
-  setInterval(refreshIfChanged, 1000);
 })();
+
+if('serviceWorker' in navigator){window.addEventListener('load',async()=>{const button=document.getElementById('push-toggle'),status=document.getElementById('push-status');try{const registration=await navigator.serviceWorker.register('/sw.js');if(!button)return;if(!('PushManager'in window)||!('Notification'in window)){status.textContent='This browser does not support phone notifications.';button.disabled=true;return}async function send(action,subscription){const fields=new URLSearchParams({action,guildId:button.dataset.guild,csrf:button.dataset.csrf,subscription:JSON.stringify(subscription)});const response=await fetch('/push',{method:'POST',body:fields,credentials:'same-origin'});if(!response.ok)throw new Error('Could not save your notification preference.');return response.json()}function display(subscribed){button.dataset.subscribed=subscribed?'yes':'no';button.textContent=subscribed?'Turn off notifications on this phone':'Enable notifications on this phone';status.textContent=subscribed?'Alerts are on for this server.':'Alerts are off for this server.'}const current=await registration.pushManager.getSubscription();if(current)display((await send('status',current.toJSON())).subscribed);else display(false);button.addEventListener('click',async()=>{button.disabled=true;try{if(button.dataset.subscribed==='yes'){const subscription=await registration.pushManager.getSubscription();if(subscription)await send('unsubscribe',subscription.toJSON());display(false)}else{if(Notification.permission!=='granted'&&await Notification.requestPermission()!=='granted')throw new Error('Notification permission was not granted.');let subscription=await registration.pushManager.getSubscription();subscription||=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:button.dataset.key});await send('subscribe',subscription.toJSON());display(true)}}catch(error){status.textContent=error.message||'Could not update notifications.'}finally{button.disabled=false}})}catch(_){if(status)status.textContent='Phone notifications could not start.'}})}
+
+// Keep server ticket pages fresh without overwriting the new Home/Casino views.
+(()=>{const ticketDetail=/^\/g\/\d+\/tickets\/\d+$/.test(location.pathname);const livePage=ticketDetail||/^\/g\/\d+(?:\/tickets)?$/.test(location.pathname);if(!livePage)return;let checking=false;const editing=()=>{const el=document.activeElement;return el&&['INPUT','TEXTAREA','SELECT','BUTTON'].includes(el.tagName)};function replaceTicketMessages(nextMain,currentMain){const current=[...currentMain.querySelectorAll('.message')],next=[...nextMain.querySelectorAll('.message')];if(current.map(n=>n.innerHTML).join('\n')===next.map(n=>n.innerHTML).join('\n'))return;const anchor=current[0]||currentMain.querySelector('hr.divider');if(!anchor)return;current.forEach(n=>n.remove());next.forEach(n=>anchor.parentNode.insertBefore(n.cloneNode(true),anchor))}async function refresh(){if(checking||document.visibilityState!=='visible'||(!ticketDetail&&editing()))return;checking=true;try{const response=await fetch(`${location.pathname}${location.search}${location.search?'&':'?'}_=${Date.now()}`,{credentials:'same-origin',cache:'no-store',headers:{'X-Ironclad-Refresh':'1'}});if(!response.ok)return;const nextMain=new DOMParser().parseFromString(await response.text(),'text/html').querySelector('main'),currentMain=document.querySelector('main');if(!nextMain||!currentMain)return;if(ticketDetail)replaceTicketMessages(nextMain,currentMain);else if(nextMain.innerHTML!==currentMain.innerHTML)currentMain.innerHTML=nextMain.innerHTML}catch(_){}finally{checking=false}}refresh();setInterval(refresh,1000)})();
